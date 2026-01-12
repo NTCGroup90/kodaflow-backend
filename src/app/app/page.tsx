@@ -1,0 +1,303 @@
+'use client';
+
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Sparkles, Link2, Brain, Target, Palette, Rocket,
+    ChevronRight, ChevronLeft, Check, Upload,
+    Zap, Image as ImageIcon, Video, Send, CreditCard
+} from 'lucide-react';
+
+const MODULES = [
+    { id: 1, name: 'Nhập liệu', icon: Link2, color: '#00d4ff' },
+    { id: 2, name: 'Brand DNA', icon: Brain, color: '#a855f7' },
+    { id: 3, name: 'Chiến lược', icon: Target, color: '#f97316' },
+    { id: 4, name: 'Sáng tạo', icon: Palette, color: '#22c55e' },
+    { id: 5, name: 'Triển khai', icon: Rocket, color: '#ef4444' },
+];
+
+export default function MarketingWorkflow() {
+    const [currentModule, setCurrentModule] = useState(1);
+    const [completedModules, setCompletedModules] = useState<number[]>([]);
+    const [credits, setCredits] = useState(125);
+    const [url, setUrl] = useState('');
+    const [brandDNA, setBrandDNA] = useState({
+        slogan: '',
+        primaryColor: '#00d4ff',
+        secondaryColor: '#a855f7',
+        accentColor: '#f97316',
+    });
+
+    const goToModule = (moduleId: number) => {
+        if (moduleId >= 1 && moduleId <= 5 && moduleId <= Math.max(...completedModules, 0) + 1) {
+            setCurrentModule(moduleId);
+        }
+    };
+
+    const completeModule = () => {
+        if (!completedModules.includes(currentModule)) {
+            setCompletedModules(prev => [...prev, currentModule]);
+        }
+        if (currentModule < 5) {
+            setCurrentModule(currentModule + 1);
+        }
+    };
+
+    return (
+        <main className="min-h-screen bg-gradient-to-b from-[#0a0a0f] to-[#121218] text-white">
+            {/* Header */}
+            <header className="flex items-center justify-between px-6 py-4 border-b border-white/5 backdrop-blur-lg sticky top-0 z-50">
+                <div className="flex items-center gap-2">
+                    <Sparkles className="text-cyan-400" size={24} />
+                    <span className="text-xl font-bold text-cyan-400">KODAFLOW</span>
+                    <span className="text-xs px-2 py-1 bg-gradient-to-r from-cyan-500 to-purple-500 rounded text-white">Marketing</span>
+                </div>
+
+                {/* Progress */}
+                <nav className="flex items-center">
+                    {MODULES.map((module, index) => {
+                        const isActive = currentModule === module.id;
+                        const isCompleted = completedModules.includes(module.id);
+                        const Icon = module.icon;
+                        return (
+                            <React.Fragment key={module.id}>
+                                {index > 0 && <div className={`w-6 h-0.5 ${isCompleted || isActive ? 'bg-gradient-to-r from-cyan-500 to-purple-500' : 'bg-white/10'}`} />}
+                                <button
+                                    onClick={() => goToModule(module.id)}
+                                    className="flex flex-col items-center gap-1 px-2"
+                                    style={{ opacity: module.id <= Math.max(...completedModules, 0) + 1 ? 1 : 0.4 }}
+                                >
+                                    <div
+                                        className={`w-9 h-9 rounded-lg flex items-center justify-center border-2 transition-all ${isActive ? 'border-cyan-400 bg-cyan-500/20 text-cyan-400 shadow-lg shadow-cyan-500/30' :
+                                                isCompleted ? 'border-green-500 bg-green-500 text-white' :
+                                                    'border-white/20 bg-white/5 text-white/50'
+                                            }`}
+                                    >
+                                        {isCompleted ? <Check size={16} /> : <Icon size={16} />}
+                                    </div>
+                                    <span className={`text-[10px] ${isActive ? 'text-white' : isCompleted ? 'text-green-400' : 'text-white/40'}`}>
+                                        {module.name}
+                                    </span>
+                                </button>
+                            </React.Fragment>
+                        );
+                    })}
+                </nav>
+
+                {/* Credits */}
+                <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                    <CreditCard size={16} className="text-purple-400" />
+                    <span className="font-bold text-cyan-400">{credits}</span>
+                    <span className="text-xs text-white/50">Credits</span>
+                </div>
+            </header>
+
+            {/* Content */}
+            <div className="max-w-4xl mx-auto px-6 py-8">
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={currentModule}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3 }}
+                    >
+                        {/* Module 1 */}
+                        {currentModule === 1 && (
+                            <div className="text-center py-8">
+                                <h1 className="text-3xl font-bold mb-2">🔗 Nhập URL sản phẩm</h1>
+                                <p className="text-white/60 mb-8">Nhập URL để AI tự động phân tích thương hiệu</p>
+
+                                <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-6">
+                                    <div className="flex items-center gap-3 bg-black/30 border border-white/10 rounded-xl p-2">
+                                        <Link2 className="text-white/40 ml-3" size={20} />
+                                        <input
+                                            type="url"
+                                            value={url}
+                                            onChange={(e) => setUrl(e.target.value)}
+                                            placeholder="https://shopee.vn/san-pham..."
+                                            className="flex-1 bg-transparent border-none text-white py-3 focus:outline-none"
+                                        />
+                                        <button
+                                            onClick={completeModule}
+                                            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/30 transition-all"
+                                        >
+                                            <Zap size={18} />
+                                            Phân tích
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-4 justify-center my-8 text-white/30">
+                                    <div className="h-px flex-1 bg-white/10 max-w-32" />
+                                    <span>hoặc</span>
+                                    <div className="h-px flex-1 bg-white/10 max-w-32" />
+                                </div>
+
+                                <button onClick={completeModule} className="px-6 py-3 border border-white/20 rounded-xl text-white/60 hover:border-cyan-500 hover:text-cyan-400 transition-all">
+                                    Bỏ qua, tạo DNA thủ công →
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Module 2 */}
+                        {currentModule === 2 && (
+                            <div className="py-8">
+                                <h1 className="text-3xl font-bold text-center mb-2">🧬 Brand DNA</h1>
+                                <p className="text-white/60 text-center mb-8">Xây dựng hồ sơ thương hiệu</p>
+
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-6">
+                                    <div>
+                                        <label className="block text-sm text-white/60 mb-2">Khẩu hiệu (Slogan)</label>
+                                        <input
+                                            type="text"
+                                            value={brandDNA.slogan}
+                                            onChange={(e) => setBrandDNA({ ...brandDNA, slogan: e.target.value })}
+                                            placeholder="Chất lượng hàng đầu..."
+                                            className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-4">
+                                        {['primaryColor', 'secondaryColor', 'accentColor'].map((key, i) => (
+                                            <div key={key}>
+                                                <label className="block text-sm text-white/60 mb-2">
+                                                    {['Màu chính', 'Màu phụ', 'Màu nhấn'][i]}
+                                                </label>
+                                                <input
+                                                    type="color"
+                                                    value={(brandDNA as any)[key]}
+                                                    onChange={(e) => setBrandDNA({ ...brandDNA, [key]: e.target.value })}
+                                                    className="w-full h-12 rounded-xl cursor-pointer border-none"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <button onClick={completeModule} className="w-full py-4 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl font-semibold hover:shadow-lg hover:shadow-purple-500/30 transition-all">
+                                        Hoàn tất Brand DNA →
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Module 3 */}
+                        {currentModule === 3 && (
+                            <div className="py-8">
+                                <h1 className="text-3xl font-bold text-center mb-2">🎯 Chiến lược</h1>
+                                <p className="text-white/60 text-center mb-8">AI đề xuất 3 góc tấn công</p>
+
+                                <div className="grid md:grid-cols-3 gap-4 mb-6">
+                                    {[1, 2, 3].map(i => (
+                                        <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-5">
+                                            <h3 className="text-orange-400 font-semibold mb-2">Góc tấn công {i}</h3>
+                                            <p className="text-sm text-white/50 mb-4">Mô tả chiến lược #{i}</p>
+                                            <div className="bg-black/30 rounded-lg p-3">
+                                                <p className="font-medium text-sm">📢 Headline mẫu</p>
+                                                <p className="text-xs text-white/50 mt-1">Mô tả ngắn gọn</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <button onClick={completeModule} className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl font-semibold">
+                                    Duyệt chiến lược →
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Module 4 */}
+                        {currentModule === 4 && (
+                            <div className="py-8">
+                                <h1 className="text-3xl font-bold text-center mb-2">🎨 Creative Studio</h1>
+                                <p className="text-white/60 text-center mb-8">Tạo Banner và Video Shorts</p>
+
+                                <div className="grid md:grid-cols-2 gap-6 mb-6">
+                                    <div className="bg-white/5 border-2 border-dashed border-white/20 rounded-2xl p-8 text-center hover:border-green-500 transition-all cursor-pointer">
+                                        <ImageIcon size={40} className="mx-auto mb-4 text-white/40" />
+                                        <h3 className="font-semibold mb-2">Banner Editor</h3>
+                                        <p className="text-sm text-white/50 mb-4">Chỉnh sửa với Fabric.js</p>
+                                        <span className="inline-block px-3 py-1 bg-green-500/20 text-green-400 rounded text-xs">Coming Soon</span>
+                                    </div>
+
+                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+                                        <Video size={40} className="mx-auto mb-4 text-white/40" />
+                                        <h3 className="font-semibold mb-2">Video Shorts</h3>
+                                        <p className="text-sm text-white/50 mb-4">Tạo video AI tự động</p>
+                                        <div className="space-y-2">
+                                            <button className="w-full py-2 bg-green-500/20 text-green-400 rounded-lg text-sm">
+                                                🎬 FREE (3/tháng)
+                                            </button>
+                                            <button
+                                                onClick={() => setCredits(c => c - 3)}
+                                                className="w-full py-2 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg text-sm"
+                                            >
+                                                ⚡ AI Video (3 credits)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button onClick={completeModule} className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl font-semibold">
+                                    Xem thành phẩm →
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Module 5 */}
+                        {currentModule === 5 && (
+                            <div className="py-8">
+                                <h1 className="text-3xl font-bold text-center mb-2">🚀 Triển khai</h1>
+                                <p className="text-white/60 text-center mb-8">Đẩy chiến dịch lên các nền tảng</p>
+
+                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                    {[
+                                        { name: 'Google Ads', icon: '🔍', type: 'Performance Max' },
+                                        { name: 'Facebook/IG', icon: '📘', type: 'Reels & Stories' },
+                                        { name: 'TikTok', icon: '🎵', type: 'Spark Ads' }
+                                    ].map(ch => (
+                                        <div key={ch.name} className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
+                                            <span className="text-3xl">{ch.icon}</span>
+                                            <h3 className="font-semibold mt-3 mb-1">{ch.name}</h3>
+                                            <span className="text-xs text-white/40">{ch.type}</span>
+                                            <button className="w-full mt-4 py-2 bg-white/10 rounded-lg text-sm hover:bg-white/20 transition-all">
+                                                Kết nối
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <button onClick={completeModule} className="w-full py-4 bg-gradient-to-r from-red-500 to-pink-500 rounded-xl font-semibold flex items-center justify-center gap-2">
+                                    <Send size={20} />
+                                    Triển khai chiến dịch
+                                </button>
+                            </div>
+                        )}
+                    </motion.div>
+                </AnimatePresence>
+            </div>
+
+            {/* Footer */}
+            <footer className="fixed bottom-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-black/50 backdrop-blur-lg border-t border-white/5">
+                <button
+                    onClick={() => goToModule(currentModule - 1)}
+                    disabled={currentModule === 1}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-white/5 disabled:opacity-40"
+                >
+                    <ChevronLeft size={18} />
+                    Quay lại
+                </button>
+
+                <span className="text-sm text-white/40">Module {currentModule} / 5</span>
+
+                <button
+                    onClick={completeModule}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500"
+                >
+                    {currentModule === 5 ? 'Hoàn tất' : 'Tiếp tục'}
+                    <ChevronRight size={18} />
+                </button>
+            </footer>
+        </main>
+    );
+}
