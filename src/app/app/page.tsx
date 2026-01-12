@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Sparkles, Link2, Brain, Target, Palette, Rocket,
     ChevronRight, ChevronLeft, Check, Upload,
-    Zap, Image as ImageIcon, Video, Send, CreditCard
+    Zap, Image as ImageIcon, Video, Send, CreditCard, Loader2
 } from 'lucide-react';
 
 const MODULES = [
@@ -21,6 +21,9 @@ export default function MarketingWorkflow() {
     const [completedModules, setCompletedModules] = useState<number[]>([]);
     const [credits, setCredits] = useState(125);
     const [url, setUrl] = useState('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisError, setAnalysisError] = useState('');
+    const [productData, setProductData] = useState<any>(null);
     const [brandDNA, setBrandDNA] = useState({
         slogan: '',
         primaryColor: '#00d4ff',
@@ -40,6 +43,55 @@ export default function MarketingWorkflow() {
         }
         if (currentModule < 5) {
             setCurrentModule(currentModule + 1);
+        }
+    };
+
+    // Actual URL analysis function
+    const analyzeUrl = async () => {
+        if (!url.trim()) {
+            setAnalysisError('Vui lòng nhập URL sản phẩm');
+            return;
+        }
+
+        setIsAnalyzing(true);
+        setAnalysisError('');
+
+        try {
+            const response = await fetch('/api/ai/analyze-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url.trim() }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Không thể phân tích URL. Vui lòng thử lại.');
+            }
+
+            const data = await response.json();
+            setProductData(data);
+
+            // Auto-fill Brand DNA from analysis
+            if (data.brandDNA) {
+                setBrandDNA({
+                    slogan: data.brandDNA.slogan || data.productName || '',
+                    primaryColor: data.brandDNA.brandColors?.[0] || '#00d4ff',
+                    secondaryColor: data.brandDNA.brandColors?.[1] || '#a855f7',
+                    accentColor: data.brandDNA.brandColors?.[2] || '#f97316',
+                });
+            } else {
+                setBrandDNA({
+                    slogan: data.productName || '',
+                    primaryColor: '#00d4ff',
+                    secondaryColor: '#a855f7',
+                    accentColor: '#f97316',
+                });
+            }
+
+            completeModule();
+        } catch (error: any) {
+            setAnalysisError(error.message || 'Có lỗi xảy ra. Vui lòng thử lại.');
+        } finally {
+            setIsAnalyzing(false);
         }
     };
 
@@ -69,8 +121,8 @@ export default function MarketingWorkflow() {
                                 >
                                     <div
                                         className={`w-9 h-9 rounded-lg flex items-center justify-center border-2 transition-all ${isActive ? 'border-cyan-400 bg-cyan-500/20 text-cyan-400 shadow-lg shadow-cyan-500/30' :
-                                                isCompleted ? 'border-green-500 bg-green-500 text-white' :
-                                                    'border-white/20 bg-white/5 text-white/50'
+                                            isCompleted ? 'border-green-500 bg-green-500 text-white' :
+                                                'border-white/20 bg-white/5 text-white/50'
                                             }`}
                                     >
                                         {isCompleted ? <Check size={16} /> : <Icon size={16} />}
@@ -117,15 +169,30 @@ export default function MarketingWorkflow() {
                                             onChange={(e) => setUrl(e.target.value)}
                                             placeholder="https://shopee.vn/san-pham..."
                                             className="flex-1 bg-transparent border-none text-white py-3 focus:outline-none"
+                                            disabled={isAnalyzing}
                                         />
                                         <button
-                                            onClick={completeModule}
-                                            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/30 transition-all"
+                                            onClick={analyzeUrl}
+                                            disabled={isAnalyzing}
+                                            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/30 transition-all disabled:opacity-50"
                                         >
-                                            <Zap size={18} />
-                                            Phân tích
+                                            {isAnalyzing ? (
+                                                <>
+                                                    <Loader2 size={18} className="animate-spin" />
+                                                    Đang phân tích...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Zap size={18} />
+                                                    Phân tích
+                                                </>
+                                            )}
                                         </button>
                                     </div>
+
+                                    {analysisError && (
+                                        <p className="text-red-400 text-sm mt-3">{analysisError}</p>
+                                    )}
                                 </div>
 
                                 <div className="flex items-center gap-4 justify-center my-8 text-white/30">
@@ -145,6 +212,15 @@ export default function MarketingWorkflow() {
                             <div className="py-8">
                                 <h1 className="text-3xl font-bold text-center mb-2">🧬 Brand DNA</h1>
                                 <p className="text-white/60 text-center mb-8">Xây dựng hồ sơ thương hiệu</p>
+
+                                {productData && (
+                                    <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 mb-6">
+                                        <p className="text-green-400 text-sm">✅ Đã phân tích: <strong>{productData.productName || url}</strong></p>
+                                        {productData.description && (
+                                            <p className="text-white/60 text-sm mt-2">{productData.description}</p>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-6">
                                     <div>

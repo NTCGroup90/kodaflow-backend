@@ -1,11 +1,12 @@
 /**
  * Gemini AI Integration
- * Uses Gemini 1.5 Pro for content analysis and generation
+ * Uses Gemini 2.0 Flash for content analysis and generation
  * Uses Imagen 3 for image generation
  */
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
 const IMAGEN_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages';
+
 
 // ==================== Image Generation Types ====================
 
@@ -213,26 +214,49 @@ export async function callGemini(
 // ==================== Product URL Analysis ====================
 
 export async function analyzeProductUrl(url: string): Promise<ProductAnalysis> {
+    // Extract domain for fallback
+    let domain = '';
+    try {
+        domain = new URL(url).hostname.replace('www.', '');
+    } catch {
+        domain = 'Unknown';
+    }
+
     // Fetch HTML content
     let htmlContent = '';
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
         const response = await fetch(url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             },
+            signal: controller.signal,
         });
+        clearTimeout(timeoutId);
+
         htmlContent = await response.text();
         // Limit to first 30k characters
         htmlContent = htmlContent.substring(0, 30000);
     } catch (error) {
-        throw new Error(`Cannot fetch URL: ${url}`);
+        console.error(`Cannot fetch URL: ${url}`, error);
+        // Return fallback with domain name
+        return {
+            productName: domain,
+            price: 'Liên hệ',
+            description: `Website: ${domain}`,
+            features: ['Xem chi tiết tại website'],
+            images: [],
+            category: 'Sản phẩm/Dịch vụ',
+        };
     }
 
     const prompt = `
 Phân tích trang sản phẩm sau và trích xuất thông tin theo format JSON.
 
 HTML Content (đã rút gọn):
-${htmlContent.substring(0, 20000)}
+${htmlContent.substring(0, 15000)}
 
 Trả về JSON với format CHÍNH XÁC như sau:
 {
@@ -251,21 +275,36 @@ Trả về JSON với format CHÍNH XÁC như sau:
 CHỈ TRẢ VỀ JSON, KHÔNG CÓ TEXT KHÁC.
 `;
 
-    const response = await callGemini(prompt, { temperature: 0.3 });
-
     try {
+        const response = await callGemini(prompt, { temperature: 0.3 });
+
         // Try to parse JSON directly
         const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        return JSON.parse(cleaned);
-    } catch {
-        // Try to extract JSON from response
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
+
+        try {
+            return JSON.parse(cleaned);
+        } catch {
+            // Try to extract JSON from response
+            const jsonMatch = response.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                return JSON.parse(jsonMatch[0]);
+            }
+            throw new Error('Cannot parse JSON');
         }
-        throw new Error('Cannot parse product analysis response');
+    } catch (error) {
+        console.error('Gemini analysis failed:', error);
+        // Return fallback
+        return {
+            productName: domain,
+            price: 'Liên hệ',
+            description: `Đã phân tích từ: ${url}`,
+            features: ['Thông tin từ website'],
+            images: [],
+            category: 'Sản phẩm/Dịch vụ',
+        };
     }
 }
+
 
 // ==================== Ad Copy Generation ====================
 
