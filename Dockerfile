@@ -1,7 +1,7 @@
-# Use Node.js 20 with FFmpeg support
+# Use Node.js 20
 FROM node:20-slim
 
-# Install FFmpeg and other dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
@@ -15,8 +15,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install all dependencies (including devDependencies for build)
+RUN npm install
 
 # Copy source code
 COPY . .
@@ -26,6 +26,10 @@ RUN npm run build
 
 # Expose port
 EXPOSE 3000
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
 
 # Start the app
 CMD ["npm", "start"]
