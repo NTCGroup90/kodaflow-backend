@@ -1,11 +1,12 @@
 /**
  * Gemini AI Integration
- * Uses Gemini 2.0 Flash for content analysis and generation
+ * Uses Gemini 1.5 Flash for content analysis and generation
  * Uses Imagen 3 for image generation
  */
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 const IMAGEN_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages';
+
 
 
 // ==================== Image Generation Types ====================
@@ -256,9 +257,10 @@ export async function analyzeProductUrl(url: string): Promise<ProductAnalysis> {
 Phân tích trang sản phẩm sau và trích xuất thông tin theo format JSON.
 
 HTML Content (đã rút gọn):
-${htmlContent.substring(0, 15000)}
+${htmlContent.substring(0, 10000)}
 
 Trả về JSON với format CHÍNH XÁC như sau:
+
 {
   "productName": "Tên sản phẩm đầy đủ",
   "price": "Giá hiện tại (VND)",
