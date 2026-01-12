@@ -2,19 +2,25 @@
 export {
     generateImage,
     analyzeProductUrl,
-    generateAdContent,
+    generateAdCopy,
+    generateProductImage,
+    generateAdBanner,
+    generateMultipleVariants,
+    generateBrandDNA,
+    callGemini,
     type ImageGenerationOptions,
     type GeneratedImage,
     type ProductAnalysis,
-    type AdCopyOptions,
-    type GeneratedAdCopy,
+    type AdCopy,
+    type BrandDNA,
+    type GeminiResponse,
 } from './gemini';
 
 // Replicate exports (Flux.1 - Alternative)
 export {
     generateImage as generateImageReplicate,
     generateImageVariants,
-    generateAdBanner,
+    generateAdBanner as generateAdBannerReplicate,
     type ImageGenerationOptions as ReplicateImageOptions,
     type GeneratedImage as ReplicateGeneratedImage,
     type BannerOptions,
