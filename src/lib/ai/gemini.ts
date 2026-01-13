@@ -4,7 +4,13 @@
  * Uses Imagen 3 for image generation
  */
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
+
+
+
+
+
+
 const IMAGEN_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages';
 
 
@@ -201,6 +207,8 @@ export async function callGemini(
         throw new Error('GEMINI_API_KEY is not configured');
     }
 
+
+
     const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
         method: 'POST',
         headers: {
@@ -297,6 +305,8 @@ YÊU CẦU PHÂN TÍCH:
 5. **Business Overview**: 2 câu tóm tắt doanh nghiệp này làm gì, bán gì, giải quyết vấn đề gì.
 6. **Colors**: Trích xuất 3-5 mã màu HEX chính từ CSS style hoặc suy luận từ ảnh/logo.
 7. **User Pain Points**: 3 vấn đề lớn nhất mà khách hàng của họ đang gặp phải.
+8. **Logo**: Tìm URL của Logo (thường trong thẻ img có id='logo' hoặc class='header-logo'). Nếu không thấy, để null.
+9. **Fonts**: Tìm tên font chữ chính được sử dụng (VD: Inter, Roboto, Montserrat).
 
 OUTPUT JSON FORMAT (Bắt buộc):
 {
@@ -309,20 +319,26 @@ OUTPUT JSON FORMAT (Bắt buộc):
     "toneOfVoice": ["Tone 1", "Tone 2", "Tone 3"],
     "aesthetics": ["Style 1", "Style 2", "Style 3"],
     "painPoints": ["Pain Point 1", "Pain Point 2", "Pain Point 3"],
-    "brandColors": ["#Hex1", "#Hex2", "#Hex3", "#Hex4", "#Hex5"]
+    "brandColors": ["#Hex1", "#Hex2", "#Hex3", "#Hex4", "#Hex5"],
+    "fonts": ["Font 1", "Font 2"],
+    "keywords": ["Keyword 1", "Keyword 2"]
   },
   "price": "Giá (nếu có)",
-  "features": ["Feature 1", "Feature 2", "Feature 3"]
+  "features": ["Feature 1", "Feature 2", "Feature 3"],
+  "images": ["Image 1", "Image 2", "Logo URL (nếu có)"]
 }
 
 LƯU Ý: JSON phải hợp lệ. Không trả về markdown. Chỉ JSON.
 `;
 
     try {
-        const response = await callGemini(prompt, { temperature: 0.4 }); // Slightly higher temp for creativity in inference
+        console.log("Sending prompt to Gemini...");
+        const response = await callGemini(prompt, { temperature: 0.5 });
+        console.log("Raw Gemini Response:", response);
 
         // Parsing logic
         let cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
         // Remove comments if any
         cleaned = cleaned.replace(/\/\/.*$/gm, '');
 
