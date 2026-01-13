@@ -6,7 +6,7 @@ import {
     Sparkles, Link2, Brain, Target, Palette, Rocket,
     ChevronRight, ChevronLeft, Check, Upload,
     Zap, Image as ImageIcon, Video, Send, CreditCard, Loader2,
-    Star, MessageSquare, AlertCircle
+    Star, MessageSquare, AlertCircle, Type
 } from 'lucide-react';
 
 
@@ -26,11 +26,16 @@ export default function MarketingWorkflow() {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisError, setAnalysisError] = useState('');
     const [productData, setProductData] = useState<any>(null);
-    const [brandDNA, setBrandDNA] = useState({
+    const [brandDNA, setBrandDNA] = useState<any>({
         slogan: '',
-        primaryColor: '#00d4ff',
-        secondaryColor: '#a855f7',
-        accentColor: '#f97316',
+        mission: '',
+        values: [],
+        toneOfVoice: [],
+        brandColors: ['#00d4ff', '#a855f7', '#f97316'],
+        logo: null,
+        fonts: [],
+        aesthetics: [],
+        painPoints: []
     });
 
     const goToModule = (moduleId: number) => {
@@ -75,17 +80,27 @@ export default function MarketingWorkflow() {
             // Auto-fill Brand DNA from analysis
             if (data.brandDNA) {
                 setBrandDNA({
-                    slogan: data.brandDNA.slogan || data.productName || '',
-                    primaryColor: data.brandDNA.brandColors?.[0] || '#00d4ff',
-                    secondaryColor: data.brandDNA.brandColors?.[1] || '#a855f7',
-                    accentColor: data.brandDNA.brandColors?.[2] || '#f97316',
+                    slogan: data.brandDNA.slogan || data.productName || 'Không tìm thấy Slogan',
+                    mission: data.brandDNA.mission || data.description || '',
+                    values: data.brandDNA.values || [],
+                    toneOfVoice: data.brandDNA.toneOfVoice || [],
+                    aesthetics: data.brandDNA.aesthetics || [],
+                    brandColors: data.brandDNA.brandColors || ['#000000', '#ffffff'],
+                    logo: data.brandDNA.logo || data.images?.find((img: any) => typeof img === 'string' && img.toLowerCase().includes('logo')) || null,
+                    fonts: data.brandDNA.fonts || [],
+                    painPoints: data.brandDNA.painPoints || []
                 });
             } else {
                 setBrandDNA({
-                    slogan: data.productName || '',
-                    primaryColor: '#00d4ff',
-                    secondaryColor: '#a855f7',
-                    accentColor: '#f97316',
+                    slogan: data.productName || 'Chưa có Slogan',
+                    mission: data.description || '',
+                    values: ['Chất lượng', 'Uy tín', 'Tận tâm'],
+                    toneOfVoice: ['Chuyên nghiệp'],
+                    brandColors: ['#00d4ff', '#a855f7'],
+                    logo: null,
+                    fonts: ['Inter', 'Arial'],
+                    aesthetics: ['Hiện đại'],
+                    painPoints: []
                 });
             }
 
@@ -209,125 +224,219 @@ export default function MarketingWorkflow() {
                             </div>
                         )}
 
-                        {/* Module 2 */}
+                        {/* Module 2: Brand DNA */}
                         {currentModule === 2 && (
-                            <div className="py-8">
-                                <h1 className="text-3xl font-bold text-center mb-2">🧬 Brand DNA</h1>
-                                <p className="text-white/60 text-center mb-8">Xây dựng hồ sơ thương hiệu</p>
-
-                                {productData && (
-                                    <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 mb-6">
-                                        <p className="text-green-400 text-sm">✅ Đã phân tích: <strong>{productData.productName || url}</strong></p>
-                                        {productData.description && (
-                                            <p className="text-white/60 text-sm mt-2">{productData.description}</p>
-                                        )}
-                                    </div>
-                                )}
-
-                                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-6">
-                                    {/* Slogan & Overview */}
-                                    <div className="space-y-4">
-                                        <div>
-                                            <h3 className="text-xl font-semibold text-white mb-2">{brandDNA.slogan || productData?.brandDNA?.slogan || "No Slogan Detected"}</h3>
-                                            <p className="text-white/60 text-sm italic">{productData?.brandDNA?.mission || "Mission statement will appear here."}</p>
-                                        </div>
-
-                                        {productData?.brandDNA && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-white/10">
-                                                {/* Brand Values */}
-                                                <div>
-                                                    <h4 className="flex items-center gap-2 text-sm font-semibold text-purple-400 mb-3">
-                                                        <Star size={14} /> Giá trị cốt lõi
-                                                    </h4>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {productData.brandDNA.values?.map((val: string, idx: number) => (
-                                                            <span key={idx} className="bg-purple-500/10 text-purple-200 border border-purple-500/20 text-xs px-3 py-1 rounded-full">
-                                                                {val}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* Tone of Voice */}
-                                                <div>
-                                                    <h4 className="flex items-center gap-2 text-sm font-semibold text-cyan-400 mb-3">
-                                                        <MessageSquare size={14} /> Giọng văn (Tone)
-                                                    </h4>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {productData.brandDNA.toneOfVoice?.map((tone: string, idx: number) => (
-                                                            <span key={idx} className="bg-cyan-500/10 text-cyan-200 border border-cyan-500/20 text-xs px-3 py-1 rounded-full">
-                                                                {tone}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* Aesthetics */}
-                                                <div>
-                                                    <h4 className="flex items-center gap-2 text-sm font-semibold text-pink-400 mb-3">
-                                                        <Palette size={14} /> Phong cách (Aesthetic)
-                                                    </h4>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {productData.brandDNA.aesthetics?.map((style: string, idx: number) => (
-                                                            <span key={idx} className="bg-pink-500/10 text-pink-200 border border-pink-500/20 text-xs px-3 py-1 rounded-full">
-                                                                {style}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* Pain Points */}
-                                                <div>
-                                                    <h4 className="flex items-center gap-2 text-sm font-semibold text-red-400 mb-3">
-                                                        <AlertCircle size={14} /> Vấn đề giải quyết
-                                                    </h4>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {productData.brandDNA.painPoints?.map((point: string, idx: number) => (
-                                                            <span key={idx} className="bg-red-500/10 text-red-200 border border-red-500/20 text-xs px-3 py-1 rounded-full">
-                                                                {point}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Color Palette */}
-                                    <div>
-                                        <label className="block text-sm text-white/60 mb-3">Bảng màu thương hiệu</label>
-                                        <div className="flex gap-4">
-                                            {productData?.brandDNA?.brandColors?.map((color: string, idx: number) => (
-                                                <div key={idx} className="group relative">
-                                                    <div
-                                                        className="w-12 h-12 rounded-full border border-white/20 shadow-lg"
-                                                        style={{ backgroundColor: color }}
-                                                    />
-                                                    <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-white/60 bg-black/50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                                                        {color}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                            {/* Fallback inputs if no colors */}
-                                            {!productData?.brandDNA?.brandColors && ['primaryColor', 'secondaryColor', 'accentColor'].map((key, i) => (
-                                                <input
-                                                    key={key}
-                                                    type="color"
-                                                    value={(brandDNA as any)[key]}
-                                                    onChange={(e) => setBrandDNA({ ...brandDNA, [key]: e.target.value })}
-                                                    className="w-12 h-12 rounded-full cursor-pointer border-none p-0 overflow-hidden"
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <button onClick={completeModule} className="w-full py-4 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl font-semibold hover:shadow-lg hover:shadow-purple-500/30 transition-all">
-                                        Hoàn tất Brand DNA →
-                                    </button>
+                            <div className="py-8 max-w-5xl mx-auto">
+                                <div className="text-center mb-8">
+                                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
+                                        🧬 Brand DNA
+                                    </h1>
+                                    <p className="text-white/60">Hồ sơ thương hiệu của bạn (Có thể chỉnh sửa)</p>
                                 </div>
 
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                                    {/* Left Column: Strategy & Text */}
+                                    <div className="lg:col-span-7 space-y-6">
+                                        {/* Slogan */}
+                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                                            <label className="flex items-center gap-2 text-sm font-semibold text-purple-400 mb-2">
+                                                <Zap size={16} /> Tagline / Slogan
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={brandDNA.slogan}
+                                                onChange={(e) => setBrandDNA({ ...brandDNA, slogan: e.target.value })}
+                                                placeholder="Nhập slogan thương hiệu..."
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-lg font-medium text-white focus:border-purple-500 focus:outline-none placeholder:text-white/20"
+                                            />
+                                        </div>
+
+                                        {/* Business Overview */}
+                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                                            <label className="flex items-center gap-2 text-sm font-semibold text-blue-400 mb-2">
+                                                <Target size={16} /> Tổng quan doanh nghiệp
+                                            </label>
+                                            <textarea
+                                                value={brandDNA.mission || productData?.description || ''}
+                                                onChange={(e) => setBrandDNA({ ...brandDNA, mission: e.target.value })}
+                                                rows={3}
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white/80 focus:border-blue-500 focus:outline-none"
+                                                placeholder="Mô tả ngắn gọn về doanh nghiệp..."
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {/* Brand Values */}
+                                            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                                                <label className="flex items-center gap-2 text-sm font-semibold text-cyan-400 mb-3">
+                                                    <Star size={16} /> Giá trị cốt lõi
+                                                </label>
+                                                <div className="flex flex-wrap gap-2 mb-2">
+                                                    {brandDNA.values?.map((val: string, idx: number) => (
+                                                        <span key={idx} className="bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-xs px-2 py-1 rounded-lg flex items-center gap-1">
+                                                            {val}
+                                                            <button onClick={() => {
+                                                                const newVals = [...(brandDNA.values || [])];
+                                                                newVals.splice(idx, 1);
+                                                                setBrandDNA({ ...brandDNA, values: newVals });
+                                                            }} className="hover:text-white">×</button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="+ Thêm giá trị (Enter)"
+                                                    className="w-full bg-black/40 border-none text-sm text-white focus:ring-0 px-3 py-2 rounded-lg"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            const val = e.currentTarget.value.trim();
+                                                            if (val) {
+                                                                setBrandDNA({ ...brandDNA, values: [...(brandDNA.values || []), val] });
+                                                                e.currentTarget.value = '';
+                                                            }
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+
+                                            {/* Tone of Voice */}
+                                            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                                                <label className="flex items-center gap-2 text-sm font-semibold text-pink-400 mb-3">
+                                                    <MessageSquare size={16} /> Tone & Mood
+                                                </label>
+                                                <div className="flex flex-wrap gap-2 mb-2">
+                                                    {brandDNA.toneOfVoice?.map((val: string, idx: number) => (
+                                                        <span key={idx} className="bg-pink-500/10 text-pink-300 border border-pink-500/20 text-xs px-2 py-1 rounded-lg flex items-center gap-1">
+                                                            {val}
+                                                            <button onClick={() => {
+                                                                const newVals = [...(brandDNA.toneOfVoice || [])];
+                                                                newVals.splice(idx, 1);
+                                                                setBrandDNA({ ...brandDNA, toneOfVoice: newVals });
+                                                            }} className="hover:text-white">×</button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="+ Thêm tone (Enter)"
+                                                    className="w-full bg-black/40 border-none text-sm text-white focus:ring-0 px-3 py-2 rounded-lg"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            const val = e.currentTarget.value.trim();
+                                                            if (val) {
+                                                                setBrandDNA({ ...brandDNA, toneOfVoice: [...(brandDNA.toneOfVoice || []), val] });
+                                                                e.currentTarget.value = '';
+                                                            }
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Right Column: Visuals & Assets */}
+                                    <div className="lg:col-span-5 space-y-6">
+                                        {/* Colors */}
+                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                                            <label className="block text-sm font-semibold text-white/60 mb-3">Bảng màu (Brand Colors)</label>
+                                            <div className="flex flex-wrap gap-3">
+                                                {(brandDNA.brandColors || ['#000000', '#ffffff']).map((color: string, idx: number) => (
+                                                    <div key={idx} className="relative group">
+                                                        <input
+                                                            type="color"
+                                                            value={color}
+                                                            onChange={(e) => {
+                                                                const newColors = [...(brandDNA.brandColors || [])];
+                                                                newColors[idx] = e.target.value;
+                                                                setBrandDNA({ ...brandDNA, brandColors: newColors });
+                                                            }}
+                                                            className="w-10 h-10 rounded-full cursor-pointer border-2 border-white/20 p-0 overflow-hidden"
+                                                        />
+                                                    </div>
+                                                ))}
+                                                <button
+                                                    onClick={() => setBrandDNA({ ...brandDNA, brandColors: [...(brandDNA.brandColors || []), '#888888'] })}
+                                                    className="w-10 h-10 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center text-white/40 hover:text-white hover:border-white/40"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Fonts */}
+                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                                            <label className="flex items-center gap-2 text-sm font-semibold text-yellow-400 mb-2">
+                                                <Type size={16} /> Typography / Fonts
+                                            </label>
+                                            <div className="flex flex-wrap gap-2 mb-2">
+                                                {brandDNA.fonts?.map((font: string, idx: number) => (
+                                                    <span key={idx} className="bg-yellow-500/10 text-yellow-200 border border-yellow-500/20 text-xs px-2 py-1 rounded-lg">
+                                                        {font}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            <input
+                                                type="text"
+                                                placeholder="Nhập tên font (VD: Inter, Roboto)..."
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:border-yellow-500 focus:outline-none"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        const val = e.currentTarget.value.trim();
+                                                        if (val) {
+                                                            setBrandDNA({ ...brandDNA, fonts: [...(brandDNA.fonts || []), val] });
+                                                            e.currentTarget.value = '';
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+
+                                        {/* Images Gallery */}
+                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <label className="flex items-center gap-2 text-sm font-semibold text-green-400">
+                                                    <ImageIcon size={16} /> Hình ảnh / Logo
+                                                </label>
+                                                <button className="text-xs text-white/40 hover:text-white flex items-center gap-1">
+                                                    <Upload size={12} /> Upload
+                                                </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                                {/* Logo placeholder if detected */}
+                                                {brandDNA.logo && (
+                                                    <div className="aspect-square bg-white rounded-lg p-2 flex items-center justify-center relative border-2 border-green-500/50">
+                                                        <img src={brandDNA.logo} alt="Logo" className="max-w-full max-h-full object-contain" />
+                                                        <div className="absolute top-1 right-1 bg-green-500 text-black text-[8px] font-bold px-1 rounded">LOGO</div>
+                                                    </div>
+                                                )}
+
+                                                {/* Product Images */}
+                                                {(productData?.images || []).map((img: string, idx: number) => (
+                                                    <div key={idx} className="aspect-square bg-black/50 rounded-lg overflow-hidden border border-white/10 relative group">
+                                                        <img src={img} alt="" className="w-full h-full object-cover" />
+                                                    </div>
+                                                ))}
+
+                                                {/* Fallback empty slots */}
+                                                {(!productData?.images?.length && !brandDNA.logo) && (
+                                                    <div className="col-span-3 text-center py-4 text-white/20 text-xs italic">
+                                                        Chưa tìm thấy ảnh. Hãy upload thủ công.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-8">
+                                    <button onClick={completeModule} className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl font-bold text-lg hover:shadow-2xl hover:shadow-purple-600/20 transition-all border border-white/10">
+                                        Xác nhận Brand DNA & Tiếp tục →
+                                    </button>
+                                </div>
                             </div>
                         )}
+
 
                         {/* Module 3 */}
                         {currentModule === 3 && (
