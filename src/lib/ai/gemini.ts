@@ -165,7 +165,19 @@ export interface ProductAnalysis {
     brand?: string;
     rating?: number;
     soldCount?: number;
+    brandDNA?: {
+        slogan?: string;
+        mission?: string;
+        values?: string[];
+        toneOfVoice?: string[];
+        aesthetics?: string[];
+        painPoints?: string[];
+        brandColors?: string[];
+        fonts?: string[];
+        keywords?: string[];
+    };
 }
+
 
 export interface AdCopy {
     headlines: string[];
@@ -223,26 +235,30 @@ export async function analyzeProductUrl(url: string): Promise<ProductAnalysis> {
         domain = 'Unknown';
     }
 
-    // Fetch HTML content
+    // Fetch HTML content with better headers
     let htmlContent = '';
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
         const response = await fetch(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8',
             },
             signal: controller.signal,
         });
         clearTimeout(timeoutId);
 
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
         htmlContent = await response.text();
-        // Limit to first 30k characters
-        htmlContent = htmlContent.substring(0, 30000);
+        // Increase limit to capture more context for brand analysis
+        htmlContent = htmlContent.substring(0, 45000);
     } catch (error) {
         console.error(`Cannot fetch URL: ${url}`, error);
-        // Return fallback with domain name
+        // Basic fallback
         return {
             productName: domain,
             price: 'Liên hệ',
@@ -250,62 +266,95 @@ export async function analyzeProductUrl(url: string): Promise<ProductAnalysis> {
             features: ['Xem chi tiết tại website'],
             images: [],
             category: 'Sản phẩm/Dịch vụ',
+            brandDNA: {
+                slogan: `Chào mừng đến với ${domain}`,
+                mission: "Cung cấp dịch vụ chất lượng cao",
+                values: ["Chất lượng", "Uy tín", "Tận tâm"],
+                toneOfVoice: ["Chuyên nghiệp", "Tin cậy"],
+                aesthetics: ["Hiện đại", "Sạch sẽ"],
+                keywords: [],
+                brandColors: ["#000000", "#ffffff", "#0088ff"]
+            }
         };
     }
 
     const prompt = `
-Phân tích trang sản phẩm sau và trích xuất thông tin theo format JSON.
+Bạn là một chuyên gia Chiến lược Thương hiệu (Brand Strategist) đẳng cấp thế giới. 
+Nhiệm vụ của bạn là phân tích HTML file của một landing page và giải mã "Brand DNA" của doanh nghiệp đó.
 
+URL: ${url}
 HTML Content (đã rút gọn):
-${htmlContent.substring(0, 10000)}
+${htmlContent}
 
-Trả về JSON với format CHÍNH XÁC như sau:
+Hãy phân tích sâu và trích xuất thông tin theo format JSON sau. 
+Nếu không tìm thấy thông tin cụ thể, hãy SUY LUẬN (INFER) dựa trên context, màu sắc, cách dùng từ của web. Đừng để trống.
 
+YÊU CẦU PHÂN TÍCH:
+1. **Tagline/Slogan**: Tìm câu khẩu hiệu chính (H1, H2 đầu trang). Nếu không có, hãy sáng tạo một câu tagline đắt giá (dưới 10 từ) tóm tắt giá trị cốt lõi.
+2. **Brand Values**: 3-5 giá trị cốt lõi (VD: Tốc độ, Bảo mật, Sáng tạo).
+3. **Tone of Voice**: Giọng văn (VD: Authoritative, Friendly, Luxury, Witty, Urgent).
+4. **Brand Aesthetics**: Phong cách thiết kế (VD: Minimalist, Cyberpunk, Corporate, Retro, High-End).
+5. **Business Overview**: 2 câu tóm tắt doanh nghiệp này làm gì, bán gì, giải quyết vấn đề gì.
+6. **Colors**: Trích xuất 3-5 mã màu HEX chính từ CSS style hoặc suy luận từ ảnh/logo.
+7. **User Pain Points**: 3 vấn đề lớn nhất mà khách hàng của họ đang gặp phải.
+
+OUTPUT JSON FORMAT (Bắt buộc):
 {
-  "productName": "Tên sản phẩm đầy đủ",
-  "price": "Giá hiện tại (VND)",
-  "originalPrice": "Giá gốc nếu có, null nếu không",
-  "description": "Mô tả ngắn gọn sản phẩm",
-  "features": ["Đặc điểm 1", "Đặc điểm 2", "Đặc điểm 3"],
-  "images": ["URL hình 1", "URL hình 2"],
-  "category": "Danh mục sản phẩm",
-  "brand": "Thương hiệu nếu có",
-  "rating": 4.5,
-  "soldCount": 1000
+  "productName": "Tên Thương Hiệu / Sản Phẩm",
+  "category": "Ngành hàng",
+  "description": "Business Overview (2-3 sentences)",
+  "brandDNA": {
+    "slogan": "Tagline chính",
+    "values": ["Value 1", "Value 2", "Value 3", "Value 4"],
+    "toneOfVoice": ["Tone 1", "Tone 2", "Tone 3"],
+    "aesthetics": ["Style 1", "Style 2", "Style 3"],
+    "painPoints": ["Pain Point 1", "Pain Point 2", "Pain Point 3"],
+    "brandColors": ["#Hex1", "#Hex2", "#Hex3", "#Hex4", "#Hex5"]
+  },
+  "price": "Giá (nếu có)",
+  "features": ["Feature 1", "Feature 2", "Feature 3"]
 }
 
-CHỈ TRẢ VỀ JSON, KHÔNG CÓ TEXT KHÁC.
+LƯU Ý: JSON phải hợp lệ. Không trả về markdown. Chỉ JSON.
 `;
 
     try {
-        const response = await callGemini(prompt, { temperature: 0.3 });
+        const response = await callGemini(prompt, { temperature: 0.4 }); // Slightly higher temp for creativity in inference
 
-        // Try to parse JSON directly
-        const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        // Parsing logic
+        let cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        // Remove comments if any
+        cleaned = cleaned.replace(/\/\/.*$/gm, '');
 
         try {
             return JSON.parse(cleaned);
         } catch {
-            // Try to extract JSON from response
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
-            }
-            throw new Error('Cannot parse JSON');
+            const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+            if (jsonMatch) return JSON.parse(jsonMatch[0]);
+            throw new Error('JSON Parse Failed');
         }
     } catch (error) {
-        console.error('Gemini analysis failed:', error);
-        // Return fallback
+        console.error('Gemini Brand Analysis failed:', error);
         return {
             productName: domain,
             price: 'Liên hệ',
-            description: `Đã phân tích từ: ${url}`,
-            features: ['Thông tin từ website'],
+            description: `Doanh nghiệp tại ${domain}`,
+            features: [],
             images: [],
-            category: 'Sản phẩm/Dịch vụ',
+            category: 'General',
+
+            brandDNA: {
+                slogan: `Giải pháp từ ${domain}`,
+                values: ["Chất lượng", "Hiệu quả"],
+                toneOfVoice: ["Chuyên nghiệp"],
+                aesthetics: ["Hiện đại"],
+                painPoints: [],
+                brandColors: ["#3b82f6", "#10b981", "#6366f1"]
+            }
         };
     }
 }
+
 
 
 // ==================== Ad Copy Generation ====================
