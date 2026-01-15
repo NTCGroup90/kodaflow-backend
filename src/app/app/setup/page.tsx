@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Settings, DollarSign, Users, Target, Check, ChevronRight,
     ArrowLeft, Rocket, Loader2, Youtube, Facebook, AlertCircle,
-    TrendingUp, Zap, Clock, Globe, Shield
+    TrendingUp, Zap, Clock, Globe, Shield, Link2, Eye, MousePointer,
+    ShoppingCart, Percent, BarChart3, Layers, ChevronDown
 } from 'lucide-react';
 
 // TikTok icon
@@ -32,14 +33,18 @@ interface AdPlatform {
     color: string;
     description: string;
     minBudget: number;
+    avgCPC: number;      // VND
+    avgCPM: number;      // VND per 1000 impressions
+    avgCTR: number;      // %
+    avgConvRate: number; // %
     recommended: boolean;
 }
 
 const AD_PLATFORMS: AdPlatform[] = [
-    { id: 'facebook', name: 'Facebook Ads', icon: Facebook, color: '#1877f2', description: 'Reach 2.9 tỷ người dùng, targeting chi tiết', minBudget: 100000, recommended: true },
-    { id: 'tiktok', name: 'TikTok Ads', icon: TikTokIcon, color: '#00f2ea', description: 'Gen Z & Millennials, viral potential cao', minBudget: 200000, recommended: true },
-    { id: 'youtube', name: 'YouTube Ads', icon: Youtube, color: '#ff0000', description: 'Video ads, pre-roll, remarketing', minBudget: 150000, recommended: false },
-    { id: 'google', name: 'Google Ads', icon: GoogleIcon, color: '#4285f4', description: 'Search & Display Network toàn cầu', minBudget: 100000, recommended: false }
+    { id: 'facebook', name: 'Facebook Ads', icon: Facebook, color: '#1877f2', description: 'Reach 2.9 tỷ người dùng, targeting chi tiết', minBudget: 100000, avgCPC: 3000, avgCPM: 45000, avgCTR: 1.5, avgConvRate: 2.5, recommended: true },
+    { id: 'tiktok', name: 'TikTok Ads', icon: TikTokIcon, color: '#00f2ea', description: 'Gen Z & Millennials, viral potential cao', minBudget: 200000, avgCPC: 2500, avgCPM: 35000, avgCTR: 2.2, avgConvRate: 1.8, recommended: true },
+    { id: 'youtube', name: 'YouTube Ads', icon: Youtube, color: '#ff0000', description: 'Video ads, pre-roll, remarketing', minBudget: 150000, avgCPC: 4000, avgCPM: 55000, avgCTR: 1.2, avgConvRate: 2.0, recommended: false },
+    { id: 'google', name: 'Google Ads', icon: GoogleIcon, color: '#4285f4', description: 'Search & Display Network toàn cầu', minBudget: 100000, avgCPC: 5000, avgCPM: 25000, avgCTR: 3.5, avgConvRate: 4.0, recommended: false }
 ];
 
 interface BudgetAllocation {
@@ -48,53 +53,175 @@ interface BudgetAllocation {
     dailyBudget: number;
 }
 
+interface BudgetProjection {
+    platformId: string;
+    impressions: number;
+    reach: number;
+    clicks: number;
+    conversions: number;
+    cpc: number;
+    cpa: number;
+}
+
+type BiddingStrategy = 'maximize_conversions' | 'lowest_cost' | 'target_roas';
+
+const BIDDING_STRATEGIES = [
+    { id: 'maximize_conversions', name: 'Tối ưu đơn hàng', description: 'AI tự động tối ưu để đạt nhiều đơn nhất', icon: ShoppingCart, recommended: true },
+    { id: 'lowest_cost', name: 'Tiết kiệm chi phí', description: 'Kiểm soát giá mỗi đơn không quá cao', icon: DollarSign, recommended: false },
+    { id: 'target_roas', name: 'Mục tiêu ROAS', description: 'Đặt ROAS mong muốn, AI tối ưu theo', icon: TrendingUp, recommended: false }
+];
+
+// ==================== BUDGET INTELLIGENCE ====================
+
+function calculateBudgetProjections(
+    dailyBudget: number,
+    allocations: BudgetAllocation[],
+    platforms: AdPlatform[]
+): BudgetProjection[] {
+    return allocations.map(allocation => {
+        const platform = platforms.find(p => p.id === allocation.platformId);
+        if (!platform) return null;
+
+        const budget = allocation.dailyBudget;
+
+        // Calculate based on platform averages
+        const impressions = Math.floor((budget / platform.avgCPM) * 1000);
+        const reach = Math.floor(impressions * 0.7); // ~70% unique reach
+        const clicks = Math.floor(impressions * (platform.avgCTR / 100));
+        const conversions = Math.floor(clicks * (platform.avgConvRate / 100));
+        const cpc = clicks > 0 ? Math.floor(budget / clicks) : platform.avgCPC;
+        const cpa = conversions > 0 ? Math.floor(budget / conversions) : 0;
+
+        return {
+            platformId: allocation.platformId,
+            impressions,
+            reach,
+            clicks,
+            conversions,
+            cpc,
+            cpa
+        };
+    }).filter(Boolean) as BudgetProjection[];
+}
+
+function generateSmartAllocation(
+    selectedPlatforms: string[],
+    brandDNA: any,
+    competitors: any[]
+): Record<string, number> {
+    // Default allocation based on industry best practices
+    const defaultAllocations: Record<string, number> = {
+        facebook: 40,
+        tiktok: 30,
+        google: 20,
+        youtube: 10
+    };
+
+    // Adjust based on target audience
+    const targetAudience = brandDNA?.targetAudience || '';
+    if (targetAudience.toLowerCase().includes('trẻ') || targetAudience.toLowerCase().includes('gen z')) {
+        defaultAllocations.tiktok = 45;
+        defaultAllocations.facebook = 35;
+    }
+
+    // Adjust based on industry
+    const industry = brandDNA?.industryCategory || '';
+    if (industry.toLowerCase().includes('ecommerce') || industry.toLowerCase().includes('shop')) {
+        defaultAllocations.facebook = 45;
+        defaultAllocations.google = 35;
+    }
+
+    // Filter and normalize
+    const total = selectedPlatforms.reduce((sum, p) => sum + (defaultAllocations[p] || 10), 0);
+    const normalized: Record<string, number> = {};
+    selectedPlatforms.forEach(p => {
+        normalized[p] = Math.round((defaultAllocations[p] || 10) / total * 100);
+    });
+
+    return normalized;
+}
+
+function generateUTMParams(brandName: string, platform: string, campaign: string): string {
+    const sanitized = (str: string) => str.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    return `utm_source=${sanitized(platform)}&utm_medium=cpc&utm_campaign=${sanitized(campaign)}&utm_content=${sanitized(brandName)}`;
+}
+
+// ==================== MAIN COMPONENT ====================
+
 export default function CampaignSetupPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [brandDNA, setBrandDNA] = useState<any>(null);
     const [campaignData, setCampaignData] = useState<any>(null);
     const [creativeData, setCreativeData] = useState<any>(null);
+    const [competitors, setCompetitors] = useState<any[]>([]);
 
     // Setup state
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['facebook', 'tiktok']);
     const [totalDailyBudget, setTotalDailyBudget] = useState(500000);
     const [budgetAllocations, setBudgetAllocations] = useState<BudgetAllocation[]>([]);
     const [campaignDuration, setCampaignDuration] = useState(7);
-    const [targetingMode, setTargetingMode] = useState<'auto' | 'manual'>('auto');
+    const [biddingStrategy, setBiddingStrategy] = useState<BiddingStrategy>('maximize_conversions');
+    const [targetROAS, setTargetROAS] = useState(3);
 
-    // AI suggestions
-    const [aiSuggestions, setAiSuggestions] = useState<any>(null);
-    const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+    // Targeting state from DNA
+    const [targetAge, setTargetAge] = useState('25-45');
+    const [targetGender, setTargetGender] = useState('all');
+    const [targetLocations, setTargetLocations] = useState<string[]>(['Việt Nam']);
+    const [targetInterests, setTargetInterests] = useState<string[]>([]);
+
+    // Account connection state
+    const [connectedAccounts, setConnectedAccounts] = useState<Record<string, boolean>>({
+        facebook: false,
+        tiktok: false,
+        google: false,
+        youtube: false
+    });
+
+    const [expandedSection, setExpandedSection] = useState<string | null>('budget');
 
     // Load data
     useEffect(() => {
         const storedDNA = localStorage.getItem('kodaflow_brand_dna');
         const storedCampaign = localStorage.getItem('kodaflow_campaign');
         const storedCreatives = localStorage.getItem('kodaflow_creatives');
+        const storedCompetitors = localStorage.getItem('kodaflow_competitors');
 
-        if (storedDNA) setBrandDNA(JSON.parse(storedDNA));
+        if (storedDNA) {
+            const dna = JSON.parse(storedDNA);
+            setBrandDNA(dna);
+
+            // Extract targeting from DNA
+            if (dna.targetAudience) {
+                // Parse age from target audience text
+                const ageMatch = dna.targetAudience.match(/(\d+)[-–](\d+)/);
+                if (ageMatch) setTargetAge(`${ageMatch[1]}-${ageMatch[2]}`);
+            }
+            if (dna.coreValues) setTargetInterests(dna.coreValues.slice(0, 5));
+        }
         if (storedCampaign) setCampaignData(JSON.parse(storedCampaign));
         if (storedCreatives) setCreativeData(JSON.parse(storedCreatives));
+        if (storedCompetitors) setCompetitors(JSON.parse(storedCompetitors));
 
-        // Initialize budget allocations
-        updateBudgetAllocations(['facebook', 'tiktok'], 500000);
+        // Initialize with smart allocation
+        const smartAlloc = generateSmartAllocation(['facebook', 'tiktok'], brandDNA, []);
+        updateBudgetAllocations(['facebook', 'tiktok'], 500000, smartAlloc);
 
         setIsLoading(false);
     }, []);
 
-    // Update budget allocations when platforms change
-    const updateBudgetAllocations = (platforms: string[], budget: number) => {
+    // Update budget allocations
+    const updateBudgetAllocations = (platforms: string[], budget: number, smartAlloc?: Record<string, number>) => {
         if (platforms.length === 0) {
             setBudgetAllocations([]);
             return;
         }
 
-        const perPlatform = Math.floor(100 / platforms.length);
-        const remainder = 100 - (perPlatform * platforms.length);
+        const allocation = smartAlloc || generateSmartAllocation(platforms, brandDNA, competitors);
 
-        const allocations = platforms.map((platformId, index) => ({
+        const allocations = platforms.map(platformId => ({
             platformId,
-            percentage: perPlatform + (index === 0 ? remainder : 0),
-            dailyBudget: Math.floor(budget * (perPlatform + (index === 0 ? remainder : 0)) / 100)
+            percentage: allocation[platformId] || Math.floor(100 / platforms.length),
+            dailyBudget: Math.floor(budget * (allocation[platformId] || Math.floor(100 / platforms.length)) / 100)
         }));
 
         setBudgetAllocations(allocations);
@@ -106,12 +233,14 @@ export default function CampaignSetupPage() {
             : [...selectedPlatforms, platformId];
 
         setSelectedPlatforms(newPlatforms);
-        updateBudgetAllocations(newPlatforms, totalDailyBudget);
+        const smartAlloc = generateSmartAllocation(newPlatforms, brandDNA, competitors);
+        updateBudgetAllocations(newPlatforms, totalDailyBudget, smartAlloc);
     };
 
     const handleBudgetChange = (value: number) => {
         setTotalDailyBudget(value);
-        updateBudgetAllocations(selectedPlatforms, value);
+        const smartAlloc = generateSmartAllocation(selectedPlatforms, brandDNA, competitors);
+        updateBudgetAllocations(selectedPlatforms, value, smartAlloc);
     };
 
     const handleAllocationChange = (platformId: string, percentage: number) => {
@@ -124,46 +253,26 @@ export default function CampaignSetupPage() {
         setBudgetAllocations(newAllocations);
     };
 
-    // Generate AI suggestions based on DNA
-    const generateAiSuggestions = async () => {
-        if (!brandDNA) return;
+    // Calculate projections
+    const projections = useMemo(() =>
+        calculateBudgetProjections(totalDailyBudget, budgetAllocations, AD_PLATFORMS),
+        [totalDailyBudget, budgetAllocations]
+    );
 
-        setIsGeneratingSuggestions(true);
+    const totalProjections = useMemo(() => projections.reduce((acc, p) => ({
+        impressions: acc.impressions + p.impressions,
+        reach: acc.reach + p.reach,
+        clicks: acc.clicks + p.clicks,
+        conversions: acc.conversions + p.conversions
+    }), { impressions: 0, reach: 0, clicks: 0, conversions: 0 }), [projections]);
 
-        // Simulate AI suggestions based on DNA
-        setTimeout(() => {
-            setAiSuggestions({
-                targetAudience: {
-                    ageRange: '25-45',
-                    gender: 'all',
-                    interests: brandDNA.coreValues || ['technology', 'business'],
-                    locations: ['Việt Nam'],
-                    behaviors: ['Online shoppers', 'Early adopters']
-                },
-                budgetRecommendation: {
-                    daily: 500000,
-                    reason: 'Phù hợp với quy mô và mục tiêu của thương hiệu'
-                },
-                platformRecommendation: {
-                    primary: 'facebook',
-                    secondary: 'tiktok',
-                    reason: 'Facebook cho reach rộng, TikTok cho viral content'
-                },
-                scheduleSuggestion: {
-                    startTime: '18:00',
-                    endTime: '23:00',
-                    reason: 'Thời gian người dùng online nhiều nhất'
-                }
-            });
-            setIsGeneratingSuggestions(false);
-        }, 1500);
-    };
-
-    useEffect(() => {
-        if (brandDNA && !aiSuggestions) {
-            generateAiSuggestions();
-        }
-    }, [brandDNA]);
+    // UTM params
+    const utmParams = useMemo(() => {
+        return selectedPlatforms.map(p => ({
+            platform: p,
+            params: generateUTMParams(brandDNA?.brandName || 'brand', p, campaignData?.angle?.title || 'campaign')
+        }));
+    }, [brandDNA, campaignData, selectedPlatforms]);
 
     const handleConfirmAndLaunch = () => {
         localStorage.setItem('kodaflow_setup', JSON.stringify({
@@ -171,8 +280,17 @@ export default function CampaignSetupPage() {
             totalDailyBudget,
             budgetAllocations,
             campaignDuration,
-            targetingMode,
-            aiSuggestions
+            biddingStrategy,
+            targetROAS,
+            targeting: {
+                age: targetAge,
+                gender: targetGender,
+                locations: targetLocations,
+                interests: targetInterests
+            },
+            utmParams,
+            projections: totalProjections,
+            connectedAccounts
         }));
         window.location.href = '/app/launch';
     };
@@ -181,7 +299,13 @@ export default function CampaignSetupPage() {
     const secondaryColor = brandDNA?.brandColors?.[1] || '#a855f7';
 
     const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
+    };
+
+    const formatNumber = (value: number) => {
+        if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+        if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
+        return value.toString();
     };
 
     if (isLoading) {
@@ -203,7 +327,7 @@ export default function CampaignSetupPage() {
                         </div>
                         <div>
                             <h1 className="text-lg font-bold">Bước 4: Cài đặt Chiến dịch</h1>
-                            <p className="text-xs text-white/50">{brandDNA?.brandName || 'Module 4'} - Budget & Targeting</p>
+                            <p className="text-xs text-white/50">{brandDNA?.brandName || 'Module 4'} - Budget Intelligence</p>
                         </div>
                     </div>
 
@@ -237,209 +361,478 @@ export default function CampaignSetupPage() {
                     ))}
                 </div>
 
+                {/* ==================== AI PROJECTIONS SUMMARY ==================== */}
+                <div className="bg-gradient-to-r from-purple-500/10 via-cyan-500/10 to-green-500/10 rounded-2xl border border-purple-500/20 p-6 mb-6">
+                    <h3 className="font-bold mb-4 flex items-center gap-2">
+                        <Zap size={18} className="text-yellow-400" /> AI Dự báo kết quả với {formatCurrency(totalDailyBudget)}/ngày
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-black/30 rounded-xl p-4 text-center">
+                            <Eye size={24} className="mx-auto mb-2 text-blue-400" />
+                            <p className="text-2xl font-bold">{formatNumber(totalProjections.impressions)}</p>
+                            <p className="text-xs text-white/50">Lượt hiển thị/ngày</p>
+                        </div>
+                        <div className="bg-black/30 rounded-xl p-4 text-center">
+                            <Users size={24} className="mx-auto mb-2 text-green-400" />
+                            <p className="text-2xl font-bold">{formatNumber(totalProjections.reach)}</p>
+                            <p className="text-xs text-white/50">Người tiếp cận</p>
+                        </div>
+                        <div className="bg-black/30 rounded-xl p-4 text-center">
+                            <MousePointer size={24} className="mx-auto mb-2 text-cyan-400" />
+                            <p className="text-2xl font-bold">{formatNumber(totalProjections.clicks)}</p>
+                            <p className="text-xs text-white/50">Clicks dự kiến</p>
+                        </div>
+                        <div className="bg-black/30 rounded-xl p-4 text-center">
+                            <ShoppingCart size={24} className="mx-auto mb-2 text-orange-400" />
+                            <p className="text-2xl font-bold">{totalProjections.conversions}</p>
+                            <p className="text-xs text-white/50">Đơn hàng dự kiến</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left Column - Platform Selection */}
+                    {/* Left Column - Main Settings */}
                     <div className="lg:col-span-2 space-y-6">
-                        {/* Platform Selection */}
-                        <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
-                            <h3 className="font-bold mb-4 flex items-center gap-2">
-                                <Globe size={18} className="text-cyan-400" /> Chọn nền tảng quảng cáo
-                            </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {AD_PLATFORMS.map(platform => (
-                                    <div
-                                        key={platform.id}
-                                        onClick={() => handlePlatformToggle(platform.id)}
-                                        className={`rounded-xl p-4 border-2 cursor-pointer transition-all ${selectedPlatforms.includes(platform.id)
-                                                ? 'bg-white/10'
-                                                : 'border-white/10 hover:border-white/30 bg-black/20'
-                                            }`}
-                                        style={selectedPlatforms.includes(platform.id) ? { borderColor: platform.color } : {}}
+
+                        {/* ==================== PLATFORM SELECTION ==================== */}
+                        <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+                            <button
+                                onClick={() => setExpandedSection(expandedSection === 'platforms' ? null : 'platforms')}
+                                className="w-full p-5 flex items-center justify-between hover:bg-white/5"
+                            >
+                                <h3 className="font-bold flex items-center gap-2">
+                                    <Globe size={18} className="text-cyan-400" /> Chọn nền tảng quảng cáo
+                                </h3>
+                                <ChevronDown size={18} className={`transition-transform ${expandedSection === 'platforms' ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            <AnimatePresence>
+                                {expandedSection === 'platforms' && (
+                                    <motion.div
+                                        initial={{ height: 0 }}
+                                        animate={{ height: 'auto' }}
+                                        exit={{ height: 0 }}
+                                        className="overflow-hidden"
                                     >
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: platform.color }}>
-                                                    <platform.icon size={20} className="text-white" />
+                                        <div className="p-5 pt-0 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {AD_PLATFORMS.map(platform => (
+                                                <div
+                                                    key={platform.id}
+                                                    onClick={() => handlePlatformToggle(platform.id)}
+                                                    className={`rounded-xl p-4 border-2 cursor-pointer transition-all ${selectedPlatforms.includes(platform.id)
+                                                            ? 'bg-white/10'
+                                                            : 'border-white/10 hover:border-white/30 bg-black/20'
+                                                        }`}
+                                                    style={selectedPlatforms.includes(platform.id) ? { borderColor: platform.color } : {}}
+                                                >
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: platform.color }}>
+                                                                <platform.icon size={20} className="text-white" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-semibold">{platform.name}</p>
+                                                                <p className="text-xs text-white/50">CPC: {formatCurrency(platform.avgCPC)}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedPlatforms.includes(platform.id) ? 'border-green-500 bg-green-500' : 'border-white/30'
+                                                            }`}>
+                                                            {selectedPlatforms.includes(platform.id) && <Check size={14} className="text-white" />}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="font-semibold">{platform.name}</p>
-                                                    {platform.recommended && (
-                                                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">Recommended</span>
-                                                    )}
+                                            ))}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* ==================== BUDGET INTELLIGENCE ==================== */}
+                        <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+                            <button
+                                onClick={() => setExpandedSection(expandedSection === 'budget' ? null : 'budget')}
+                                className="w-full p-5 flex items-center justify-between hover:bg-white/5"
+                            >
+                                <h3 className="font-bold flex items-center gap-2">
+                                    <DollarSign size={18} className="text-green-400" /> Budget Intelligence
+                                </h3>
+                                <ChevronDown size={18} className={`transition-transform ${expandedSection === 'budget' ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            <AnimatePresence>
+                                {expandedSection === 'budget' && (
+                                    <motion.div
+                                        initial={{ height: 0 }}
+                                        animate={{ height: 'auto' }}
+                                        exit={{ height: 0 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="p-5 pt-0 space-y-6">
+                                            {/* Budget Slider */}
+                                            <div>
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <span className="text-white/60">Ngân sách hàng ngày</span>
+                                                    <span className="text-3xl font-bold" style={{ color: primaryColor }}>{formatCurrency(totalDailyBudget)}</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min={100000}
+                                                    max={10000000}
+                                                    step={50000}
+                                                    value={totalDailyBudget}
+                                                    onChange={(e) => handleBudgetChange(Number(e.target.value))}
+                                                    className="w-full h-3 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                                                    style={{ accentColor: primaryColor }}
+                                                />
+                                                <div className="flex justify-between text-xs text-white/40 mt-1">
+                                                    <span>100K</span>
+                                                    <span>10M</span>
                                                 </div>
                                             </div>
-                                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedPlatforms.includes(platform.id) ? 'border-green-500 bg-green-500' : 'border-white/30'
-                                                }`}>
-                                                {selectedPlatforms.includes(platform.id) && <Check size={14} className="text-white" />}
+
+                                            {/* Smart Allocation */}
+                                            <div>
+                                                <p className="text-sm text-white/60 mb-3 flex items-center gap-2">
+                                                    <Layers size={14} /> Smart Allocation (AI đề xuất)
+                                                </p>
+                                                <div className="space-y-3">
+                                                    {budgetAllocations.map(allocation => {
+                                                        const platform = AD_PLATFORMS.find(p => p.id === allocation.platformId);
+                                                        const projection = projections.find(p => p.platformId === allocation.platformId);
+                                                        return (
+                                                            <div key={allocation.platformId} className="bg-black/30 rounded-xl p-4">
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        {platform && <platform.icon size={16} style={{ color: platform.color }} />}
+                                                                        <span className="font-medium">{platform?.name}</span>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <span className="font-bold">{formatCurrency(allocation.dailyBudget)}</span>
+                                                                        <span className="text-white/40 text-sm ml-2">({allocation.percentage}%)</span>
+                                                                    </div>
+                                                                </div>
+                                                                <input
+                                                                    type="range"
+                                                                    min={10}
+                                                                    max={80}
+                                                                    value={allocation.percentage}
+                                                                    onChange={(e) => handleAllocationChange(allocation.platformId, Number(e.target.value))}
+                                                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer mb-2"
+                                                                    style={{ accentColor: platform?.color }}
+                                                                />
+                                                                {/* Mini projections */}
+                                                                {projection && (
+                                                                    <div className="flex gap-4 text-xs text-white/50">
+                                                                        <span>👁️ {formatNumber(projection.impressions)}</span>
+                                                                        <span>👆 {projection.clicks} clicks</span>
+                                                                        <span>🛒 {projection.conversions} đơn</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            {/* Campaign Duration */}
+                                            <div className="pt-4 border-t border-white/10">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-white/60 flex items-center gap-2"><Clock size={16} /> Thời gian chạy</span>
+                                                    <span className="font-bold text-xl">{campaignDuration} ngày</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min={3}
+                                                    max={30}
+                                                    value={campaignDuration}
+                                                    onChange={(e) => setCampaignDuration(Number(e.target.value))}
+                                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                                                    style={{ accentColor: secondaryColor }}
+                                                />
+                                                <div className="mt-3 p-4 bg-gradient-to-r from-purple-500/10 to-cyan-500/10 rounded-xl border border-purple-500/20">
+                                                    <div className="flex justify-between items-center">
+                                                        <span>💰 Tổng chi phí dự kiến</span>
+                                                        <span className="text-xl font-bold" style={{ color: primaryColor }}>
+                                                            {formatCurrency(totalDailyBudget * campaignDuration)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-sm text-white/50 mt-1">
+                                                        <span>📦 Dự kiến đơn hàng</span>
+                                                        <span>{totalProjections.conversions * campaignDuration} đơn</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                        <p className="text-sm text-white/60">{platform.description}</p>
-                                        <p className="text-xs text-white/40 mt-2">Ngân sách tối thiểu: {formatCurrency(platform.minBudget)}/ngày</p>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* ==================== BIDDING STRATEGY ==================== */}
+                        <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+                            <button
+                                onClick={() => setExpandedSection(expandedSection === 'bidding' ? null : 'bidding')}
+                                className="w-full p-5 flex items-center justify-between hover:bg-white/5"
+                            >
+                                <h3 className="font-bold flex items-center gap-2">
+                                    <BarChart3 size={18} className="text-purple-400" /> Chiến lược đấu thầu
+                                </h3>
+                                <ChevronDown size={18} className={`transition-transform ${expandedSection === 'bidding' ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            <AnimatePresence>
+                                {expandedSection === 'bidding' && (
+                                    <motion.div
+                                        initial={{ height: 0 }}
+                                        animate={{ height: 'auto' }}
+                                        exit={{ height: 0 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="p-5 pt-0 space-y-3">
+                                            {BIDDING_STRATEGIES.map(strategy => (
+                                                <div
+                                                    key={strategy.id}
+                                                    onClick={() => setBiddingStrategy(strategy.id as BiddingStrategy)}
+                                                    className={`rounded-xl p-4 border-2 cursor-pointer transition-all ${biddingStrategy === strategy.id
+                                                            ? 'border-purple-500 bg-purple-500/10'
+                                                            : 'border-white/10 hover:border-white/30'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${biddingStrategy === strategy.id ? 'bg-purple-500' : 'bg-white/10'
+                                                            }`}>
+                                                            <strategy.icon size={20} />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="font-semibold">{strategy.name}</p>
+                                                                {strategy.recommended && <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full">Khuyên dùng</span>}
+                                                            </div>
+                                                            <p className="text-xs text-white/50">{strategy.description}</p>
+                                                        </div>
+                                                        <div className={`w-5 h-5 rounded-full border-2 ${biddingStrategy === strategy.id ? 'border-purple-500 bg-purple-500' : 'border-white/30'
+                                                            }`}>
+                                                            {biddingStrategy === strategy.id && <Check size={12} className="text-white m-0.5" />}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            {biddingStrategy === 'target_roas' && (
+                                                <div className="mt-4 p-4 bg-black/30 rounded-xl">
+                                                    <label className="text-sm text-white/60 mb-2 block">ROAS mục tiêu</label>
+                                                    <div className="flex items-center gap-4">
+                                                        <input
+                                                            type="range"
+                                                            min={1}
+                                                            max={10}
+                                                            step={0.5}
+                                                            value={targetROAS}
+                                                            onChange={(e) => setTargetROAS(Number(e.target.value))}
+                                                            className="flex-1 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                                                        />
+                                                        <span className="text-xl font-bold w-16 text-right">{targetROAS}x</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* ==================== TARGETING ==================== */}
+                        <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+                            <button
+                                onClick={() => setExpandedSection(expandedSection === 'targeting' ? null : 'targeting')}
+                                className="w-full p-5 flex items-center justify-between hover:bg-white/5"
+                            >
+                                <h3 className="font-bold flex items-center gap-2">
+                                    <Target size={18} className="text-orange-400" /> Đối tượng mục tiêu (từ DNA)
+                                </h3>
+                                <ChevronDown size={18} className={`transition-transform ${expandedSection === 'targeting' ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            <AnimatePresence>
+                                {expandedSection === 'targeting' && (
+                                    <motion.div
+                                        initial={{ height: 0 }}
+                                        animate={{ height: 'auto' }}
+                                        exit={{ height: 0 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="p-5 pt-0 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="bg-black/30 rounded-xl p-4">
+                                                <label className="text-xs text-white/40 block mb-2">Độ tuổi</label>
+                                                <select
+                                                    value={targetAge}
+                                                    onChange={(e) => setTargetAge(e.target.value)}
+                                                    className="w-full bg-white/10 rounded-lg px-3 py-2 text-white"
+                                                >
+                                                    <option value="18-24">18-24 tuổi</option>
+                                                    <option value="25-34">25-34 tuổi</option>
+                                                    <option value="25-45">25-45 tuổi</option>
+                                                    <option value="35-54">35-54 tuổi</option>
+                                                    <option value="55+">55+ tuổi</option>
+                                                </select>
+                                            </div>
+                                            <div className="bg-black/30 rounded-xl p-4">
+                                                <label className="text-xs text-white/40 block mb-2">Giới tính</label>
+                                                <select
+                                                    value={targetGender}
+                                                    onChange={(e) => setTargetGender(e.target.value)}
+                                                    className="w-full bg-white/10 rounded-lg px-3 py-2 text-white"
+                                                >
+                                                    <option value="all">Tất cả</option>
+                                                    <option value="male">Nam</option>
+                                                    <option value="female">Nữ</option>
+                                                </select>
+                                            </div>
+                                            <div className="bg-black/30 rounded-xl p-4 md:col-span-2">
+                                                <label className="text-xs text-white/40 block mb-2">Sở thích (từ Core Values)</label>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {targetInterests.map((interest, i) => (
+                                                        <span key={i} className="px-3 py-1 bg-white/10 rounded-full text-sm">{interest}</span>
+                                                    ))}
+                                                    {targetInterests.length === 0 && <span className="text-white/40 text-sm">Chưa có dữ liệu từ DNA</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* ==================== UTM & TRACKING ==================== */}
+                        <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+                            <button
+                                onClick={() => setExpandedSection(expandedSection === 'tracking' ? null : 'tracking')}
+                                className="w-full p-5 flex items-center justify-between hover:bg-white/5"
+                            >
+                                <h3 className="font-bold flex items-center gap-2">
+                                    <Link2 size={18} className="text-cyan-400" /> UTM & Tracking
+                                </h3>
+                                <ChevronDown size={18} className={`transition-transform ${expandedSection === 'tracking' ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            <AnimatePresence>
+                                {expandedSection === 'tracking' && (
+                                    <motion.div
+                                        initial={{ height: 0 }}
+                                        animate={{ height: 'auto' }}
+                                        exit={{ height: 0 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="p-5 pt-0 space-y-3">
+                                            <p className="text-sm text-white/60">UTM Parameters tự động cho mỗi platform:</p>
+                                            {utmParams.map(utm => {
+                                                const platform = AD_PLATFORMS.find(p => p.id === utm.platform);
+                                                return (
+                                                    <div key={utm.platform} className="bg-black/30 rounded-xl p-4">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            {platform && <platform.icon size={14} style={{ color: platform.color }} />}
+                                                            <span className="font-medium text-sm">{platform?.name}</span>
+                                                        </div>
+                                                        <code className="text-xs text-cyan-400 break-all">?{utm.params}</code>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </div>
+
+                    {/* Right Column - Account Connection & Summary */}
+                    <div className="space-y-6">
+                        {/* Account Connection */}
+                        <div className="bg-gradient-to-br from-purple-500/10 to-cyan-500/10 rounded-2xl border border-purple-500/20 p-6">
+                            <h3 className="font-bold mb-4 flex items-center gap-2">
+                                <Shield size={18} className="text-green-400" /> Kết nối tài khoản Ads
+                            </h3>
+                            <div className="space-y-3">
+                                {selectedPlatforms.map(platformId => {
+                                    const platform = AD_PLATFORMS.find(p => p.id === platformId);
+                                    return (
+                                        <div
+                                            key={platformId}
+                                            className={`rounded-xl p-4 border cursor-pointer transition-all ${connectedAccounts[platformId] ? 'bg-green-500/10 border-green-500/30' : 'bg-black/30 border-white/10 hover:border-white/30'
+                                                }`}
+                                            onClick={() => setConnectedAccounts(prev => ({ ...prev, [platformId]: !prev[platformId] }))}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    {platform && <platform.icon size={20} style={{ color: platform.color }} />}
+                                                    <span className="font-medium">{platform?.name}</span>
+                                                </div>
+                                                {connectedAccounts[platformId] ? (
+                                                    <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full">✓ Đã kết nối</span>
+                                                ) : (
+                                                    <span className="text-xs px-2 py-1 bg-white/10 text-white/50 rounded-full">Click để kết nối</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {Object.values(connectedAccounts).filter(Boolean).length < selectedPlatforms.length && (
+                                <div className="mt-4 p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
+                                    <p className="text-sm text-yellow-300 flex items-center gap-2">
+                                        <AlertCircle size={14} /> Vui lòng kết nối tất cả tài khoản trước khi chạy
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Pre-launch Checklist */}
+                        <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
+                            <h3 className="font-bold mb-4">✅ Checklist trước khi chạy</h3>
+                            <div className="space-y-3">
+                                {[
+                                    { label: 'Chọn nền tảng', done: selectedPlatforms.length > 0 },
+                                    { label: 'Thiết lập ngân sách', done: totalDailyBudget >= 100000 },
+                                    { label: 'Chọn chiến lược đấu thầu', done: !!biddingStrategy },
+                                    { label: 'Upload creatives', done: creativeData?.uploadedVideos?.length > 0 || creativeData?.uploadedImages?.length > 0 },
+                                    { label: 'Kết nối tài khoản Ads', done: Object.values(connectedAccounts).filter(Boolean).length === selectedPlatforms.length }
+                                ].map((item, i) => (
+                                    <div key={i} className="flex items-center gap-3">
+                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${item.done ? 'bg-green-500' : 'bg-white/10'}`}>
+                                            {item.done && <Check size={12} />}
+                                        </div>
+                                        <span className={item.done ? 'text-white' : 'text-white/50'}>{item.label}</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
-                        {/* Budget Settings */}
-                        <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
-                            <h3 className="font-bold mb-4 flex items-center gap-2">
-                                <DollarSign size={18} className="text-green-400" /> Ngân sách hàng ngày
-                            </h3>
-
-                            <div className="mb-6">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-white/60">Tổng ngân sách/ngày</span>
-                                    <span className="text-2xl font-bold" style={{ color: primaryColor }}>{formatCurrency(totalDailyBudget)}</span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min={100000}
-                                    max={5000000}
-                                    step={50000}
-                                    value={totalDailyBudget}
-                                    onChange={(e) => handleBudgetChange(Number(e.target.value))}
-                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                                    style={{ accentColor: primaryColor }}
-                                />
-                                <div className="flex justify-between text-xs text-white/40 mt-1">
-                                    <span>100k</span>
-                                    <span>5M</span>
-                                </div>
-                            </div>
-
-                            {/* Budget Allocation */}
-                            {budgetAllocations.length > 0 && (
-                                <div className="space-y-3">
-                                    <p className="text-sm text-white/60 mb-2">Phân bổ ngân sách:</p>
-                                    {budgetAllocations.map(allocation => {
-                                        const platform = AD_PLATFORMS.find(p => p.id === allocation.platformId);
-                                        return (
-                                            <div key={allocation.platformId} className="bg-black/30 rounded-xl p-4">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        {platform && <platform.icon size={16} style={{ color: platform.color }} />}
-                                                        <span>{platform?.name}</span>
-                                                    </div>
-                                                    <span className="font-semibold">{formatCurrency(allocation.dailyBudget)}</span>
-                                                </div>
-                                                <input
-                                                    type="range"
-                                                    min={10}
-                                                    max={90}
-                                                    value={allocation.percentage}
-                                                    onChange={(e) => handleAllocationChange(allocation.platformId, Number(e.target.value))}
-                                                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                                                    style={{ accentColor: platform?.color }}
-                                                />
-                                                <p className="text-xs text-white/40 mt-1">{allocation.percentage}%</p>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {/* Campaign Duration */}
-                            <div className="mt-6 pt-6 border-t border-white/10">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-white/60 flex items-center gap-2"><Clock size={16} /> Thời gian chạy</span>
-                                    <span className="font-bold">{campaignDuration} ngày</span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min={3}
-                                    max={30}
-                                    value={campaignDuration}
-                                    onChange={(e) => setCampaignDuration(Number(e.target.value))}
-                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                                    style={{ accentColor: secondaryColor }}
-                                />
-                                <div className="mt-2 p-3 bg-purple-500/10 rounded-lg border border-purple-500/20">
-                                    <p className="text-sm text-purple-300">
-                                        💰 Tổng chi phí dự kiến: <strong>{formatCurrency(totalDailyBudget * campaignDuration)}</strong>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right Column - AI Suggestions */}
-                    <div className="space-y-6">
-                        {/* AI Targeting Suggestions */}
-                        <div className="bg-gradient-to-br from-purple-500/10 to-cyan-500/10 rounded-2xl border border-purple-500/20 p-6">
-                            <h3 className="font-bold mb-4 flex items-center gap-2">
-                                <Zap size={18} className="text-yellow-400" /> AI Đề xuất
-                            </h3>
-
-                            {isGeneratingSuggestions ? (
-                                <div className="text-center py-8">
-                                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-purple-400" />
-                                    <p className="text-white/60 text-sm">Đang phân tích DNA...</p>
-                                </div>
-                            ) : aiSuggestions ? (
-                                <div className="space-y-4">
-                                    {/* Target Audience */}
-                                    <div className="bg-black/30 rounded-xl p-4">
-                                        <p className="text-xs text-white/40 mb-2 flex items-center gap-1"><Users size={12} /> Đối tượng mục tiêu</p>
-                                        <p className="font-medium">Tuổi: {aiSuggestions.targetAudience.ageRange}</p>
-                                        <div className="flex flex-wrap gap-1 mt-2">
-                                            {aiSuggestions.targetAudience.interests.map((interest: string, i: number) => (
-                                                <span key={i} className="text-xs px-2 py-0.5 bg-white/10 rounded-full">{interest}</span>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Schedule */}
-                                    <div className="bg-black/30 rounded-xl p-4">
-                                        <p className="text-xs text-white/40 mb-2 flex items-center gap-1"><Clock size={12} /> Lịch chạy tối ưu</p>
-                                        <p className="font-medium">{aiSuggestions.scheduleSuggestion.startTime} - {aiSuggestions.scheduleSuggestion.endTime}</p>
-                                        <p className="text-xs text-white/50 mt-1">{aiSuggestions.scheduleSuggestion.reason}</p>
-                                    </div>
-
-                                    {/* Platform Recommendation */}
-                                    <div className="bg-black/30 rounded-xl p-4">
-                                        <p className="text-xs text-white/40 mb-2 flex items-center gap-1"><TrendingUp size={12} /> Platform ưu tiên</p>
-                                        <p className="font-medium capitalize">{aiSuggestions.platformRecommendation.primary} + {aiSuggestions.platformRecommendation.secondary}</p>
-                                        <p className="text-xs text-white/50 mt-1">{aiSuggestions.platformRecommendation.reason}</p>
-                                    </div>
-                                </div>
-                            ) : null}
-                        </div>
-
                         {/* Assets Summary */}
                         <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
-                            <h3 className="font-bold mb-4 flex items-center gap-2">
-                                <Shield size={18} className="text-green-400" /> Assets đã chuẩn bị
-                            </h3>
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between p-3 bg-black/30 rounded-lg">
+                            <h3 className="font-bold mb-4">📦 Assets đã chuẩn bị</h3>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between p-2 bg-black/30 rounded-lg">
                                     <span>Video Scripts</span>
                                     <span className="text-green-400">{creativeData?.scripts?.length || 0}</span>
                                 </div>
-                                <div className="flex items-center justify-between p-3 bg-black/30 rounded-lg">
+                                <div className="flex justify-between p-2 bg-black/30 rounded-lg">
                                     <span>Image Briefs</span>
                                     <span className="text-green-400">{creativeData?.imageBriefs?.length || 0}</span>
                                 </div>
-                                <div className="flex items-center justify-between p-3 bg-black/30 rounded-lg">
+                                <div className="flex justify-between p-2 bg-black/30 rounded-lg">
                                     <span>Videos Uploaded</span>
                                     <span className={creativeData?.uploadedVideos?.length > 0 ? 'text-green-400' : 'text-yellow-400'}>
                                         {creativeData?.uploadedVideos?.length || 0}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-between p-3 bg-black/30 rounded-lg">
+                                <div className="flex justify-between p-2 bg-black/30 rounded-lg">
                                     <span>Images Uploaded</span>
                                     <span className={creativeData?.uploadedImages?.length > 0 ? 'text-green-400' : 'text-yellow-400'}>
                                         {creativeData?.uploadedImages?.length || 0}
                                     </span>
                                 </div>
                             </div>
-
-                            {(!creativeData?.uploadedVideos?.length && !creativeData?.uploadedImages?.length) && (
-                                <div className="mt-4 p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-                                    <p className="text-sm text-yellow-300 flex items-center gap-2">
-                                        <AlertCircle size={14} /> Chưa upload video/ảnh. Quay lại bước Nội dung để upload.
-                                    </p>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
