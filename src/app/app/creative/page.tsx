@@ -5,11 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Palette, Video, Image as ImageIcon, Upload, Download, Check, ChevronRight,
     ArrowLeft, Rocket, Sparkles, FileVideo, Copy, Loader2, X, AlertCircle,
-    Youtube, Facebook, Maximize2, Edit3, Zap, Target, TrendingUp
+    Youtube, Facebook, Maximize2, Edit3, Zap, Target, TrendingUp, ImagePlus
 } from 'lucide-react';
 
 // Platform types - Removed Instagram
 type Platform = 'tiktok' | 'youtube_shorts' | 'youtube_preroll' | 'facebook_reels' | 'facebook_feed';
+type ImagePlatform = 'facebook' | 'youtube' | 'google_display';
 
 interface ViralVideoScript {
     platform: string;
@@ -45,6 +46,26 @@ interface UploadedVideo {
     errors: string[];
 }
 
+interface UploadedImage {
+    platform: ImagePlatform;
+    sizeId: string;
+    sizeName: string;
+    file: File;
+    url: string;
+    width: number;
+    height: number;
+    isValid: boolean;
+    errors: string[];
+}
+
+interface ImageBrief {
+    platform: ImagePlatform;
+    sizeId: string;
+    sizeName: string;
+    prompt: string;
+    dimensions: { width: number; height: number };
+}
+
 // TikTok icon component
 const TikTokIcon = ({ size = 18, className = '' }: { size?: number; className?: string }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -70,8 +91,14 @@ const PLATFORMS: { id: Platform; name: string; icon: any; color: string; needsVi
     { id: 'facebook_feed', name: 'FB Feed', icon: Facebook, color: '#1877f2', needsVideo: true, needsImage: true }
 ];
 
+const IMAGE_PLATFORMS: { id: ImagePlatform; name: string; icon: any; color: string }[] = [
+    { id: 'facebook', name: 'Facebook Ads', icon: Facebook, color: '#1877f2' },
+    { id: 'youtube', name: 'YouTube', icon: Youtube, color: '#ff0000' },
+    { id: 'google_display', name: 'Google Display', icon: GoogleIcon, color: '#4285f4' }
+];
+
 // Image sizes by platform
-const IMAGE_SIZES = {
+const IMAGE_SIZES: Record<ImagePlatform, { id: string; name: string; width: number; height: number }[]> = {
     facebook: [
         { id: 'fb_feed', name: 'Facebook Feed', width: 1200, height: 628 },
         { id: 'fb_square', name: 'Facebook Square', width: 1080, height: 1080 }
@@ -98,34 +125,39 @@ const VIDEO_SPECS: Record<Platform, { aspectRatio: string; minDuration: number; 
 export default function CreativeStudioPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [brandDNA, setBrandDNA] = useState<any>(null);
+    const [campaignData, setCampaignData] = useState<any>(null);
     const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['tiktok', 'facebook_reels']);
-    const [activeTab, setActiveTab] = useState<'scripts' | 'images' | 'uploads'>('scripts');
+    const [activeTab, setActiveTab] = useState<'scripts' | 'image_briefs' | 'upload_videos' | 'upload_images'>('scripts');
 
     // Scripts state
     const [scripts, setScripts] = useState<ViralVideoScript[]>([]);
     const [isGeneratingScripts, setIsGeneratingScripts] = useState(false);
     const [activeScriptPlatform, setActiveScriptPlatform] = useState<Platform | null>(null);
 
-    // Image state - with editable prompts
-    const [selectedImagePlatform, setSelectedImagePlatform] = useState<'facebook' | 'youtube' | 'google_display'>('facebook');
-    const [selectedImageSize, setSelectedImageSize] = useState('fb_feed');
-    const [imagePrompt, setImagePrompt] = useState('');
-    const [isPromptReady, setIsPromptReady] = useState(false);
-    const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
-    const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-    const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-    const [externalPrompts, setExternalPrompts] = useState<any>(null);
+    // Image briefs state
+    const [imageBriefs, setImageBriefs] = useState<ImageBrief[]>([]);
+    const [isGeneratingBriefs, setIsGeneratingBriefs] = useState(false);
+    const [selectedImagePlatforms, setSelectedImagePlatforms] = useState<ImagePlatform[]>(['facebook', 'google_display']);
 
     // Upload state
     const [uploadedVideos, setUploadedVideos] = useState<UploadedVideo[]>([]);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+    const videoInputRef = useRef<HTMLInputElement>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
     const [uploadPlatform, setUploadPlatform] = useState<Platform>('tiktok');
+    const [uploadImagePlatform, setUploadImagePlatform] = useState<ImagePlatform>('facebook');
+    const [uploadImageSize, setUploadImageSize] = useState('fb_feed');
 
-    // Load brand DNA
+    // Load brand DNA and campaign data
     useEffect(() => {
         const storedDNA = localStorage.getItem('kodaflow_brand_dna');
+        const storedCampaign = localStorage.getItem('kodaflow_campaign');
+
         if (storedDNA) {
             setBrandDNA(JSON.parse(storedDNA));
+        }
+        if (storedCampaign) {
+            setCampaignData(JSON.parse(storedCampaign));
         }
         setIsLoading(false);
     }, []);
@@ -171,91 +203,56 @@ export default function CreativeStudioPage() {
         }
     };
 
-    // Step 1: Generate editable prompt
-    const handleGeneratePrompt = async () => {
+    // Generate image briefs
+    const handleGenerateImageBriefs = async () => {
         if (!brandDNA) return;
 
-        setIsGeneratingPrompt(true);
-        setIsPromptReady(false);
-        setGeneratedImage(null);
+        setIsGeneratingBriefs(true);
+        const briefs: ImageBrief[] = [];
 
-        try {
-            const response = await fetch('/api/creative/generate-image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'generate_prompt',
-                    brandDNA: {
-                        brandName: brandDNA.brandName,
-                        selectedTagline: brandDNA.selectedTagline || brandDNA.tagline,
-                        coreValues: brandDNA.coreValues || [],
-                        targetAudience: brandDNA.targetAudience || '',
-                        painPoints: brandDNA.painPoints || [],
-                        uniqueSellingPoints: brandDNA.uniqueSellingPoints || [],
-                        toneOfVoice: brandDNA.toneOfVoice || [],
-                        industryCategory: brandDNA.industryCategory || '',
-                        brandColors: brandDNA.brandColors || []
-                    },
-                    platform: selectedImagePlatform,
-                    sizeId: selectedImageSize
-                })
-            });
+        for (const platform of selectedImagePlatforms) {
+            const sizes = IMAGE_SIZES[platform];
+            for (const size of sizes) {
+                try {
+                    const response = await fetch('/api/creative/generate-image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'generate_prompt',
+                            brandDNA: {
+                                brandName: brandDNA.brandName,
+                                selectedTagline: brandDNA.selectedTagline || brandDNA.tagline,
+                                coreValues: brandDNA.coreValues || [],
+                                targetAudience: brandDNA.targetAudience || '',
+                                painPoints: brandDNA.painPoints || [],
+                                uniqueSellingPoints: brandDNA.uniqueSellingPoints || [],
+                                toneOfVoice: brandDNA.toneOfVoice || [],
+                                industryCategory: brandDNA.industryCategory || '',
+                                brandColors: brandDNA.brandColors || []
+                            },
+                            platform,
+                            sizeId: size.id
+                        })
+                    });
 
-            const result = await response.json();
-            if (result.success) {
-                setImagePrompt(result.data.prompt);
-                setIsPromptReady(true);
-            }
-        } catch (error) {
-            console.error('Error generating prompt:', error);
-        } finally {
-            setIsGeneratingPrompt(false);
-        }
-    };
-
-    // Step 2: Generate image with (edited) prompt
-    const handleGenerateImage = async () => {
-        if (!brandDNA || !imagePrompt) return;
-
-        setIsGeneratingImage(true);
-
-        try {
-            const response = await fetch('/api/creative/generate-image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'generate_image',
-                    brandDNA: {
-                        brandName: brandDNA.brandName,
-                        selectedTagline: brandDNA.selectedTagline || brandDNA.tagline,
-                        coreValues: brandDNA.coreValues || [],
-                        targetAudience: brandDNA.targetAudience || '',
-                        painPoints: brandDNA.painPoints || [],
-                        uniqueSellingPoints: brandDNA.uniqueSellingPoints || [],
-                        toneOfVoice: brandDNA.toneOfVoice || [],
-                        industryCategory: brandDNA.industryCategory || '',
-                        brandColors: brandDNA.brandColors || []
-                    },
-                    platform: selectedImagePlatform,
-                    sizeId: selectedImageSize,
-                    customPrompt: imagePrompt
-                })
-            });
-
-            const result = await response.json();
-            if (result.success) {
-                if (result.data.imageUrl) {
-                    setGeneratedImage(result.data.imageUrl);
-                }
-                if (result.data.externalToolInstructions) {
-                    setExternalPrompts(result.data.externalToolInstructions);
+                    const result = await response.json();
+                    if (result.success) {
+                        briefs.push({
+                            platform,
+                            sizeId: size.id,
+                            sizeName: size.name,
+                            prompt: result.data.prompt,
+                            dimensions: { width: size.width, height: size.height }
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Error generating brief for ${size.name}:`, error);
                 }
             }
-        } catch (error) {
-            console.error('Error generating image:', error);
-        } finally {
-            setIsGeneratingImage(false);
         }
+
+        setImageBriefs(briefs);
+        setIsGeneratingBriefs(false);
     };
 
     // Handle video upload
@@ -301,6 +298,42 @@ export default function CreativeStudioPage() {
         video.src = URL.createObjectURL(file);
     };
 
+    // Handle image upload
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const img = new Image();
+        img.onload = () => {
+            const sizeSpec = IMAGE_SIZES[uploadImagePlatform].find(s => s.id === uploadImageSize);
+            const errors: string[] = [];
+
+            if (sizeSpec) {
+                // Allow 10% tolerance
+                const widthDiff = Math.abs(img.width - sizeSpec.width) / sizeSpec.width;
+                const heightDiff = Math.abs(img.height - sizeSpec.height) / sizeSpec.height;
+
+                if (widthDiff > 0.1 || heightDiff > 0.1) {
+                    errors.push(`Kích thước không đúng! Cần ${sizeSpec.width}x${sizeSpec.height}, bạn upload ${img.width}x${img.height}`);
+                }
+            }
+
+            setUploadedImages(prev => [...prev.filter(i => !(i.platform === uploadImagePlatform && i.sizeId === uploadImageSize)), {
+                platform: uploadImagePlatform,
+                sizeId: uploadImageSize,
+                sizeName: sizeSpec?.name || '',
+                file,
+                url: URL.createObjectURL(file),
+                width: img.width,
+                height: img.height,
+                isValid: errors.length === 0,
+                errors
+            }]);
+        };
+
+        img.src = URL.createObjectURL(file);
+    };
+
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
     };
@@ -308,17 +341,25 @@ export default function CreativeStudioPage() {
     const primaryColor = brandDNA?.brandColors?.[0] || '#00d4ff';
     const secondaryColor = brandDNA?.brandColors?.[1] || '#a855f7';
 
-    const handleConfirmAndLaunch = () => {
+    const handleConfirmAndContinue = () => {
         localStorage.setItem('kodaflow_creatives', JSON.stringify({
             scripts,
+            imageBriefs,
             uploadedVideos: uploadedVideos.map(v => ({
                 platform: v.platform,
                 fileName: v.file.name,
                 duration: v.duration,
                 isValid: v.isValid
+            })),
+            uploadedImages: uploadedImages.map(i => ({
+                platform: i.platform,
+                sizeId: i.sizeId,
+                sizeName: i.sizeName,
+                fileName: i.file.name,
+                isValid: i.isValid
             }))
         }));
-        window.location.href = '/app/launch';
+        window.location.href = '/app/setup';
     };
 
     if (isLoading) {
@@ -339,72 +380,48 @@ export default function CreativeStudioPage() {
                             <Palette size={20} />
                         </div>
                         <div>
-                            <h1 className="text-lg font-bold">Creative Studio Pro</h1>
-                            <p className="text-xs text-white/50">{brandDNA?.brandName || 'Module 4'} - Viral Content</p>
+                            <h1 className="text-lg font-bold">Bước 3: Tạo Nội Dung</h1>
+                            <p className="text-xs text-white/50">{brandDNA?.brandName || 'Module 3'} - Kịch bản & Ảnh</p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-3">
                         <button onClick={() => window.location.href = '/app/campaign'} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm flex items-center gap-2">
-                            <ArrowLeft size={14} /> Campaign
+                            <ArrowLeft size={14} /> Chiến lược
                         </button>
-                        <button onClick={handleConfirmAndLaunch} className="px-6 py-2 rounded-lg font-semibold flex items-center gap-2" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
-                            <Rocket size={16} /> Launch
+                        <button onClick={handleConfirmAndContinue} className="px-6 py-2 rounded-lg font-semibold flex items-center gap-2" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                            <Rocket size={16} /> Cài đặt Ads
                         </button>
                     </div>
                 </div>
             </header>
 
             <div className="max-w-7xl mx-auto px-6 py-6">
-                {/* Asset Requirements Overview */}
-                <div className="bg-gradient-to-r from-purple-500/10 to-cyan-500/10 rounded-2xl border border-white/10 p-6 mb-6">
-                    <h3 className="font-bold mb-4 flex items-center gap-2">
-                        <Target size={18} className="text-cyan-400" /> Nguyên liệu cần chuẩn bị
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-black/30 rounded-xl p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <TikTokIcon size={16} />
-                                <span className="font-medium">TikTok</span>
+                {/* Progress indicator */}
+                <div className="mb-6 flex items-center justify-center gap-2">
+                    {['DNA', 'Chiến lược', 'Nội dung', 'Cài đặt', 'Chạy'].map((step, i) => (
+                        <React.Fragment key={step}>
+                            <div className={`px-4 py-2 rounded-lg text-sm font-medium ${i === 2 ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white' : i < 2 ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-white/40'}`}>
+                                {i < 2 ? <Check size={14} className="inline mr-1" /> : null}
+                                {step}
                             </div>
-                            <p className="text-xs text-white/60">Video 9:16, 9-60s<br />❌ Không cần ảnh</p>
-                        </div>
-                        <div className="bg-black/30 rounded-xl p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Youtube size={16} className="text-red-500" />
-                                <span className="font-medium">YouTube</span>
-                            </div>
-                            <p className="text-xs text-white/60">Video 9:16 hoặc 16:9<br />✅ Thumbnail 1280x720</p>
-                        </div>
-                        <div className="bg-black/30 rounded-xl p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Facebook size={16} className="text-blue-500" />
-                                <span className="font-medium">Facebook</span>
-                            </div>
-                            <p className="text-xs text-white/60">Video + ảnh<br />✅ 1200x628, 1080x1080</p>
-                        </div>
-                        <div className="bg-black/30 rounded-xl p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <GoogleIcon size={16} />
-                                <span className="font-medium">Google Display</span>
-                            </div>
-                            <p className="text-xs text-white/60">❌ Không cần video<br />✅ 300x250, 728x90, 160x600</p>
-                        </div>
-                    </div>
+                            {i < 4 && <ChevronRight size={16} className="text-white/20" />}
+                        </React.Fragment>
+                    ))}
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="flex gap-2 mb-6">
+                <div className="flex flex-wrap gap-2 mb-6">
                     {[
-                        { id: 'scripts', label: 'Kịch bản Viral', icon: Zap },
-                        { id: 'images', label: 'Tạo Ảnh Ads', icon: ImageIcon },
-                        { id: 'uploads', label: 'Upload Video', icon: Upload }
+                        { id: 'scripts', label: 'Kịch bản Video', icon: Zap },
+                        { id: 'image_briefs', label: 'Brief Ảnh', icon: Edit3 },
+                        { id: 'upload_videos', label: 'Upload Video', icon: Video },
+                        { id: 'upload_images', label: 'Upload Ảnh', icon: ImagePlus }
                     ].map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
-                            className={`px-6 py-3 rounded-xl font-medium flex items-center gap-2 transition-all ${activeTab === tab.id ? 'text-white' : 'bg-white/5 text-white/60 hover:bg-white/10'
-                                }`}
+                            className={`px-5 py-3 rounded-xl font-medium flex items-center gap-2 transition-all ${activeTab === tab.id ? 'text-white' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
                             style={activeTab === tab.id ? { background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` } : {}}
                         >
                             <tab.icon size={18} /> {tab.label}
@@ -413,7 +430,7 @@ export default function CreativeStudioPage() {
                 </div>
 
                 <AnimatePresence mode="wait">
-                    {/* ==================== VIRAL SCRIPTS TAB ==================== */}
+                    {/* ==================== SCRIPTS TAB ==================== */}
                     {activeTab === 'scripts' && (
                         <motion.div key="scripts" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                             <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
@@ -427,11 +444,10 @@ export default function CreativeStudioPage() {
                                             onClick={() => setSelectedPlatforms(prev =>
                                                 prev.includes(platform.id) ? prev.filter(p => p !== platform.id) : [...prev, platform.id]
                                             )}
-                                            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all border ${selectedPlatforms.includes(platform.id) ? 'border-transparent text-white' : 'border-white/10 text-white/60 hover:border-white/30'
-                                                }`}
+                                            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all border ${selectedPlatforms.includes(platform.id) ? 'border-transparent text-white' : 'border-white/10 text-white/60 hover:border-white/30'}`}
                                             style={selectedPlatforms.includes(platform.id) ? { background: platform.color } : {}}
                                         >
-                                            {typeof platform.icon === 'function' ? <platform.icon size={16} /> : <platform.icon size={16} />}
+                                            <platform.icon size={16} />
                                             {platform.name}
                                             {selectedPlatforms.includes(platform.id) && <Check size={14} />}
                                         </button>
@@ -449,7 +465,7 @@ export default function CreativeStudioPage() {
                                 </button>
                             </div>
 
-                            {/* Generated Scripts */}
+                            {/* Scripts display - simplified */}
                             {scripts.length > 0 && (
                                 <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
                                     <div className="flex border-b border-white/10 overflow-x-auto">
@@ -459,8 +475,7 @@ export default function CreativeStudioPage() {
                                                 <button
                                                     key={script.platform}
                                                     onClick={() => setActiveScriptPlatform(script.platform as Platform)}
-                                                    className={`px-4 py-3 flex items-center gap-2 whitespace-nowrap ${activeScriptPlatform === script.platform ? 'bg-white/10 border-b-2' : 'text-white/60 hover:text-white'
-                                                        }`}
+                                                    className={`px-4 py-3 flex items-center gap-2 whitespace-nowrap ${activeScriptPlatform === script.platform ? 'bg-white/10 border-b-2' : 'text-white/60 hover:text-white'}`}
                                                     style={activeScriptPlatform === script.platform ? { borderColor: platform?.color } : {}}
                                                 >
                                                     {platform && <platform.icon size={16} />}
@@ -475,90 +490,32 @@ export default function CreativeStudioPage() {
                                             {(() => {
                                                 const script = scripts.find(s => s.platform === activeScriptPlatform)!;
                                                 return (
-                                                    <div className="space-y-6">
-                                                        {/* Script Stats */}
-                                                        <div className="flex flex-wrap gap-4 text-sm">
-                                                            <span className="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400">
-                                                                🎯 Hook: {script.hookType}
-                                                            </span>
-                                                            <span className={`px-3 py-1 rounded-full ${script.estimatedCTR === 'High' ? 'bg-green-500/20 text-green-400' :
-                                                                    script.estimatedCTR === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                                        'bg-red-500/20 text-red-400'
-                                                                }`}>
+                                                    <div className="space-y-4">
+                                                        <div className="flex flex-wrap gap-3 text-sm">
+                                                            <span className="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400">🎯 Hook: {script.hookType}</span>
+                                                            <span className={`px-3 py-1 rounded-full ${script.estimatedCTR === 'High' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
                                                                 📈 CTR: {script.estimatedCTR}
                                                             </span>
-                                                            <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400">
-                                                                ⏱️ {script.duration}
-                                                            </span>
-                                                            <span className="px-3 py-1 rounded-full bg-white/10">
-                                                                📐 {script.aspectRatio}
-                                                            </span>
                                                         </div>
 
-                                                        {/* Scenes */}
-                                                        <div className="space-y-4">
-                                                            <h4 className="font-semibold">📋 Kịch bản từng cảnh</h4>
-                                                            {script.scenes?.map((scene, i) => (
-                                                                <div key={i} className="bg-black/30 rounded-xl p-4 border-l-4" style={{ borderColor: scene.type === 'hook' ? '#ff0000' : scene.type === 'cta' ? '#00ff00' : '#ffffff30' }}>
-                                                                    <div className="flex items-center gap-3 mb-3">
-                                                                        <span className="text-xs px-2 py-1 rounded-full bg-white/10">{scene.timeRange}</span>
-                                                                        <span className="text-sm font-medium capitalize px-2 py-1 rounded-full" style={{ background: scene.type === 'hook' ? '#ff000030' : scene.type === 'cta' ? '#00ff0030' : '#ffffff10' }}>
-                                                                            {scene.type}
-                                                                        </span>
-                                                                        {scene.emotionalTrigger && (
-                                                                            <span className="text-xs text-white/50">💭 {scene.emotionalTrigger}</span>
-                                                                        )}
-                                                                    </div>
-                                                                    <p className="text-white/80 mb-2">🎬 <strong>Visual:</strong> {scene.visual}</p>
-                                                                    <p className="text-cyan-400 mb-2">🎤 <strong>Voiceover:</strong> "{scene.voiceover}"</p>
-                                                                    <p className="text-yellow-400 text-sm">📝 <strong>Text:</strong> {scene.textOverlay}</p>
+                                                        {script.scenes?.map((scene, i) => (
+                                                            <div key={i} className="bg-black/30 rounded-xl p-4 border-l-4" style={{ borderColor: scene.type === 'hook' ? '#ff0000' : scene.type === 'cta' ? '#00ff00' : '#ffffff30' }}>
+                                                                <div className="flex items-center gap-3 mb-2">
+                                                                    <span className="text-xs px-2 py-1 rounded-full bg-white/10">{scene.timeRange}</span>
+                                                                    <span className="text-sm font-medium capitalize">{scene.type}</span>
                                                                 </div>
-                                                            ))}
-                                                        </div>
+                                                                <p className="text-cyan-400 mb-1">🎤 "{scene.voiceover}"</p>
+                                                                <p className="text-yellow-400 text-sm">📝 {scene.textOverlay}</p>
+                                                            </div>
+                                                        ))}
 
-                                                        {/* AI Video Prompt */}
-                                                        <div className="bg-gradient-to-r from-purple-500/10 to-cyan-500/10 rounded-xl p-4 border border-purple-500/20">
+                                                        <div className="bg-gradient-to-r from-purple-500/10 to-cyan-500/10 rounded-xl p-4">
                                                             <div className="flex items-center justify-between mb-2">
-                                                                <h4 className="font-semibold">🤖 Prompt cho AI Video (Veo 3/Kling/Runway)</h4>
-                                                                <button onClick={() => copyToClipboard(script.aiVideoPrompt)} className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-sm flex items-center gap-1">
-                                                                    <Copy size={12} /> Copy
-                                                                </button>
+                                                                <strong>🤖 Prompt cho AI Video</strong>
+                                                                <button onClick={() => copyToClipboard(script.aiVideoPrompt)} className="px-3 py-1 bg-white/10 rounded text-sm">Copy</button>
                                                             </div>
                                                             <p className="text-white/70 text-sm">{script.aiVideoPrompt}</p>
                                                         </div>
-
-                                                        {/* Caption & Hashtags */}
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                            <div className="bg-black/30 rounded-xl p-4">
-                                                                <div className="flex items-center justify-between mb-2">
-                                                                    <h4 className="font-semibold">📝 Caption</h4>
-                                                                    <button onClick={() => copyToClipboard(script.captionText)} className="p-1 bg-white/10 hover:bg-white/20 rounded">
-                                                                        <Copy size={12} />
-                                                                    </button>
-                                                                </div>
-                                                                <p className="text-white/70 text-sm">{script.captionText}</p>
-                                                            </div>
-                                                            <div className="bg-black/30 rounded-xl p-4">
-                                                                <h4 className="font-semibold mb-2"># Hashtags</h4>
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {script.hashtagSuggestions?.map((tag, i) => (
-                                                                        <span key={i} className="text-xs px-2 py-1 bg-white/10 rounded-full text-cyan-400">#{tag}</span>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Conversion Tips */}
-                                                        {script.conversionTips && (
-                                                            <div className="bg-green-500/10 rounded-xl p-4 border border-green-500/20">
-                                                                <h4 className="font-semibold text-green-400 mb-2">💡 Tips tăng Conversion</h4>
-                                                                <ul className="space-y-1">
-                                                                    {script.conversionTips.map((tip, i) => (
-                                                                        <li key={i} className="text-sm text-white/70">• {tip}</li>
-                                                                    ))}
-                                                                </ul>
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 );
                                             })()}
@@ -569,142 +526,80 @@ export default function CreativeStudioPage() {
                         </motion.div>
                     )}
 
-                    {/* ==================== IMAGES TAB ==================== */}
-                    {activeTab === 'images' && (
-                        <motion.div key="images" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                    {/* ==================== IMAGE BRIEFS TAB ==================== */}
+                    {activeTab === 'image_briefs' && (
+                        <motion.div key="image_briefs" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                             <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
-                                <h3 className="font-bold mb-4">Tạo Ảnh Quảng Cáo từ DNA</h3>
-
-                                {/* Platform Selection */}
-                                <div className="mb-4">
-                                    <label className="text-sm text-white/60 mb-2 block">Chọn platform</label>
-                                    <div className="flex gap-2">
-                                        {[
-                                            { id: 'facebook', name: 'Facebook', icon: Facebook },
-                                            { id: 'youtube', name: 'YouTube', icon: Youtube },
-                                            { id: 'google_display', name: 'Google Display', icon: GoogleIcon }
-                                        ].map(p => (
-                                            <button
-                                                key={p.id}
-                                                onClick={() => {
-                                                    setSelectedImagePlatform(p.id as any);
-                                                    setSelectedImageSize(IMAGE_SIZES[p.id as keyof typeof IMAGE_SIZES][0].id);
-                                                    setIsPromptReady(false);
-                                                    setGeneratedImage(null);
-                                                }}
-                                                className={`px-4 py-2 rounded-lg flex items-center gap-2 ${selectedImagePlatform === p.id ? 'text-white' : 'bg-white/5 text-white/60'
-                                                    }`}
-                                                style={selectedImagePlatform === p.id ? { background: primaryColor } : {}}
-                                            >
-                                                {typeof p.icon === 'function' ? <p.icon size={16} /> : <p.icon size={16} />}
-                                                {p.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Size Selection */}
-                                <div className="mb-4">
-                                    <label className="text-sm text-white/60 mb-2 block">Chọn kích thước</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {IMAGE_SIZES[selectedImagePlatform]?.map(size => (
-                                            <button
-                                                key={size.id}
-                                                onClick={() => {
-                                                    setSelectedImageSize(size.id);
-                                                    setIsPromptReady(false);
-                                                    setGeneratedImage(null);
-                                                }}
-                                                className={`px-3 py-2 rounded-lg text-sm ${selectedImageSize === size.id ? 'text-white' : 'bg-white/5 text-white/60'
-                                                    }`}
-                                                style={selectedImageSize === size.id ? { background: secondaryColor } : {}}
-                                            >
-                                                {size.name} ({size.width}x{size.height})
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Step 1: Generate Prompt */}
-                                {!isPromptReady && (
-                                    <button
-                                        onClick={handleGeneratePrompt}
-                                        disabled={isGeneratingPrompt}
-                                        className="px-6 py-3 rounded-xl font-semibold flex items-center gap-2 disabled:opacity-50"
-                                        style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
-                                    >
-                                        {isGeneratingPrompt ? <Loader2 className="animate-spin" size={18} /> : <Edit3 size={18} />}
-                                        Bước 1: Tạo Prompt từ DNA
-                                    </button>
-                                )}
-
-                                {/* Step 2: Edit Prompt & Generate */}
-                                {isPromptReady && (
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="text-sm text-white/60 mb-2 block flex items-center gap-2">
-                                                <Edit3 size={14} /> Chỉnh sửa prompt (nếu cần)
-                                            </label>
-                                            <textarea
-                                                value={imagePrompt}
-                                                onChange={(e) => setImagePrompt(e.target.value)}
-                                                rows={8}
-                                                className="w-full bg-black/30 rounded-xl p-4 text-sm text-white/80 border border-white/10 focus:border-cyan-500 focus:outline-none"
-                                            />
-                                        </div>
+                                <h3 className="font-bold mb-4">Chọn platform cần ảnh quảng cáo</h3>
+                                <div className="flex flex-wrap gap-3 mb-4">
+                                    {IMAGE_PLATFORMS.map(platform => (
                                         <button
-                                            onClick={handleGenerateImage}
-                                            disabled={isGeneratingImage}
-                                            className="px-6 py-3 rounded-xl font-semibold flex items-center gap-2 disabled:opacity-50"
-                                            style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
+                                            key={platform.id}
+                                            onClick={() => setSelectedImagePlatforms(prev =>
+                                                prev.includes(platform.id) ? prev.filter(p => p !== platform.id) : [...prev, platform.id]
+                                            )}
+                                            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all border ${selectedImagePlatforms.includes(platform.id) ? 'border-transparent text-white' : 'border-white/10 text-white/60'}`}
+                                            style={selectedImagePlatforms.includes(platform.id) ? { background: platform.color } : {}}
                                         >
-                                            {isGeneratingImage ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
-                                            Bước 2: Tạo Ảnh
+                                            {typeof platform.icon === 'function' ? <platform.icon size={16} /> : <platform.icon size={16} />}
+                                            {platform.name}
+                                            {selectedImagePlatforms.includes(platform.id) && <Check size={14} />}
                                         </button>
-                                    </div>
-                                )}
+                                    ))}
+                                </div>
+
+                                <button
+                                    onClick={handleGenerateImageBriefs}
+                                    disabled={isGeneratingBriefs || selectedImagePlatforms.length === 0}
+                                    className="px-6 py-3 rounded-xl font-semibold flex items-center gap-2 disabled:opacity-50"
+                                    style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
+                                >
+                                    {isGeneratingBriefs ? <Loader2 className="animate-spin" size={18} /> : <Edit3 size={18} />}
+                                    Tạo Brief Ảnh từ DNA
+                                </button>
                             </div>
 
-                            {/* Generated Image or External Prompts */}
-                            {(generatedImage || externalPrompts) && (
-                                <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
-                                    <h4 className="font-bold mb-4">Kết quả</h4>
-
-                                    {generatedImage ? (
-                                        <img src={generatedImage} alt="Generated" className="rounded-xl max-w-full mb-4" />
-                                    ) : externalPrompts && (
-                                        <div className="space-y-4">
-                                            <p className="text-white/60 text-sm mb-4">
-                                                ⚠️ Gemini không thể tạo ảnh trực tiếp. Sử dụng prompt dưới đây với các tool khác:
-                                            </p>
-                                            <div className="bg-black/30 rounded-xl p-4">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <strong>DALL-E / ChatGPT</strong>
-                                                    <button onClick={() => copyToClipboard(externalPrompts.dallePrompt)} className="px-3 py-1 bg-white/10 rounded text-sm">Copy</button>
+                            {/* Image briefs display */}
+                            {imageBriefs.length > 0 && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {imageBriefs.map((brief, i) => {
+                                        const platform = IMAGE_PLATFORMS.find(p => p.id === brief.platform);
+                                        return (
+                                            <div key={i} className="bg-white/5 rounded-2xl border border-white/10 p-5">
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    {platform && (typeof platform.icon === 'function' ? <platform.icon size={18} /> : <platform.icon size={18} style={{ color: platform.color }} />)}
+                                                    <span className="font-semibold">{brief.sizeName}</span>
+                                                    <span className="text-xs text-white/40">{brief.dimensions.width}x{brief.dimensions.height}</span>
                                                 </div>
-                                                <p className="text-xs text-white/60">{externalPrompts.dallePrompt?.slice(0, 200)}...</p>
+                                                <textarea
+                                                    value={brief.prompt}
+                                                    onChange={(e) => {
+                                                        const newBriefs = [...imageBriefs];
+                                                        newBriefs[i].prompt = e.target.value;
+                                                        setImageBriefs(newBriefs);
+                                                    }}
+                                                    rows={5}
+                                                    className="w-full bg-black/30 rounded-lg p-3 text-sm text-white/80 border border-white/10 focus:border-cyan-500 focus:outline-none"
+                                                />
+                                                <button onClick={() => copyToClipboard(brief.prompt)} className="mt-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm flex items-center gap-1">
+                                                    <Copy size={14} /> Copy Prompt
+                                                </button>
                                             </div>
-                                            <div className="bg-black/30 rounded-xl p-4">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <strong>Midjourney</strong>
-                                                    <button onClick={() => copyToClipboard(externalPrompts.midjourneyPrompt)} className="px-3 py-1 bg-white/10 rounded text-sm">Copy</button>
-                                                </div>
-                                                <p className="text-xs text-white/60">{externalPrompts.midjourneyPrompt?.slice(0, 200)}...</p>
-                                            </div>
-                                        </div>
-                                    )}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </motion.div>
                     )}
 
-                    {/* ==================== UPLOADS TAB ==================== */}
-                    {activeTab === 'uploads' && (
-                        <motion.div key="uploads" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                    {/* ==================== UPLOAD VIDEOS TAB ==================== */}
+                    {activeTab === 'upload_videos' && (
+                        <motion.div key="upload_videos" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                             <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
-                                <h3 className="font-bold mb-4">Upload Video theo Platform</h3>
+                                <h3 className="font-bold mb-4">Upload Video đã tạo</h3>
+                                <p className="text-white/60 text-sm mb-4">Sau khi tạo video bằng CapCut, Veo 3, Kling... hãy upload lên đây</p>
 
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
                                     {PLATFORMS.filter(p => p.needsVideo).map(platform => {
                                         const specs = VIDEO_SPECS[platform.id];
                                         const uploaded = uploadedVideos.find(v => v.platform === platform.id);
@@ -712,53 +607,125 @@ export default function CreativeStudioPage() {
                                         return (
                                             <div
                                                 key={platform.id}
-                                                className={`rounded-xl p-4 border cursor-pointer transition-all ${uploadPlatform === platform.id ? 'border-2' : 'border-white/10 hover:border-white/30'
-                                                    } ${uploaded ? (uploaded.isValid ? 'bg-green-500/10' : 'bg-red-500/10') : 'bg-black/30'}`}
+                                                className={`rounded-xl p-3 border cursor-pointer transition-all ${uploadPlatform === platform.id ? 'border-2' : 'border-white/10'} ${uploaded ? (uploaded.isValid ? 'bg-green-500/10' : 'bg-red-500/10') : 'bg-black/30'}`}
                                                 style={uploadPlatform === platform.id ? { borderColor: platform.color } : {}}
                                                 onClick={() => setUploadPlatform(platform.id)}
                                             >
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <platform.icon size={18} style={{ color: platform.color }} />
-                                                    <span className="font-medium text-sm">{platform.name}</span>
-                                                    {uploaded && (uploaded.isValid ? <Check size={14} className="text-green-400" /> : <AlertCircle size={14} className="text-red-400" />)}
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <platform.icon size={16} style={{ color: platform.color }} />
+                                                    <span className="text-sm font-medium">{platform.name}</span>
+                                                    {uploaded && (uploaded.isValid ? <Check size={12} className="text-green-400" /> : <X size={12} className="text-red-400" />)}
                                                 </div>
-                                                <div className="text-xs text-white/50 space-y-1">
-                                                    <p>📐 {specs.aspectRatio}</p>
-                                                    <p>⏱️ {specs.minDuration}-{specs.maxDuration}s</p>
-                                                </div>
+                                                <p className="text-xs text-white/40">{specs.aspectRatio} • {specs.minDuration}-{specs.maxDuration}s</p>
                                             </div>
                                         );
                                     })}
                                 </div>
 
-                                <div
-                                    className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-white/40 cursor-pointer"
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
-                                    <input ref={fileInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
-                                    <Upload size={40} className="mx-auto mb-4 text-white/40" />
+                                <div className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-white/40 cursor-pointer" onClick={() => videoInputRef.current?.click()}>
+                                    <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
+                                    <Upload size={32} className="mx-auto mb-2 text-white/40" />
                                     <p className="text-white/60">
                                         Upload video cho <strong style={{ color: PLATFORMS.find(p => p.id === uploadPlatform)?.color }}>{PLATFORMS.find(p => p.id === uploadPlatform)?.name}</strong>
                                     </p>
                                 </div>
                             </div>
 
+                            {/* Uploaded videos */}
                             {uploadedVideos.length > 0 && (
                                 <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
-                                    <h4 className="font-bold mb-4">Video đã upload</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <h4 className="font-bold mb-4">Video đã upload ({uploadedVideos.length})</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {uploadedVideos.map((video, i) => {
                                             const platform = PLATFORMS.find(p => p.id === video.platform);
                                             return (
                                                 <div key={i} className={`rounded-xl p-4 border ${video.isValid ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
                                                     <div className="flex items-center gap-2 mb-2">
-                                                        {platform && <platform.icon size={18} style={{ color: platform.color }} />}
+                                                        {platform && <platform.icon size={16} style={{ color: platform.color }} />}
                                                         <span className="font-medium">{platform?.name}</span>
                                                         {video.isValid ? <Check size={14} className="text-green-400" /> : <AlertCircle size={14} className="text-red-400" />}
                                                     </div>
-                                                    <video src={video.url} className="w-full rounded-lg mb-2" style={{ maxHeight: '200px' }} controls />
-                                                    <div className="text-xs text-white/50">{video.width}x{video.height} • {Math.round(video.duration)}s</div>
-                                                    {!video.isValid && <div className="mt-2 text-xs text-red-400">⚠️ {video.errors.join(', ')}</div>}
+                                                    <video src={video.url} className="w-full rounded-lg mb-2" style={{ maxHeight: '150px' }} controls />
+                                                    <p className="text-xs text-white/50">{Math.round(video.duration)}s • {video.width}x{video.height}</p>
+                                                    {!video.isValid && <p className="text-xs text-red-400 mt-1">⚠️ {video.errors.join(', ')}</p>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+
+                    {/* ==================== UPLOAD IMAGES TAB ==================== */}
+                    {activeTab === 'upload_images' && (
+                        <motion.div key="upload_images" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                            <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
+                                <h3 className="font-bold mb-4">Upload Ảnh đã tạo</h3>
+                                <p className="text-white/60 text-sm mb-4">Sau khi tạo ảnh bằng Canva, DALL-E, Midjourney... hãy upload lên đây</p>
+
+                                {/* Platform selection */}
+                                <div className="flex gap-2 mb-4">
+                                    {IMAGE_PLATFORMS.map(platform => (
+                                        <button
+                                            key={platform.id}
+                                            onClick={() => {
+                                                setUploadImagePlatform(platform.id);
+                                                setUploadImageSize(IMAGE_SIZES[platform.id][0].id);
+                                            }}
+                                            className={`px-4 py-2 rounded-lg flex items-center gap-2 ${uploadImagePlatform === platform.id ? 'text-white' : 'bg-white/5 text-white/60'}`}
+                                            style={uploadImagePlatform === platform.id ? { background: platform.color } : {}}
+                                        >
+                                            {typeof platform.icon === 'function' ? <platform.icon size={16} /> : <platform.icon size={16} />}
+                                            {platform.name}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Size selection */}
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {IMAGE_SIZES[uploadImagePlatform].map(size => {
+                                        const uploaded = uploadedImages.find(i => i.platform === uploadImagePlatform && i.sizeId === size.id);
+                                        return (
+                                            <button
+                                                key={size.id}
+                                                onClick={() => setUploadImageSize(size.id)}
+                                                className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${uploadImageSize === size.id ? 'text-white' : 'bg-white/5 text-white/60'}`}
+                                                style={uploadImageSize === size.id ? { background: secondaryColor } : {}}
+                                            >
+                                                {size.name} ({size.width}x{size.height})
+                                                {uploaded && (uploaded.isValid ? <Check size={12} className="text-green-400" /> : <X size={12} className="text-red-400" />)}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-white/40 cursor-pointer" onClick={() => imageInputRef.current?.click()}>
+                                    <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                                    <ImagePlus size={32} className="mx-auto mb-2 text-white/40" />
+                                    <p className="text-white/60">
+                                        Upload ảnh <strong>{IMAGE_SIZES[uploadImagePlatform].find(s => s.id === uploadImageSize)?.name}</strong>
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Uploaded images */}
+                            {uploadedImages.length > 0 && (
+                                <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
+                                    <h4 className="font-bold mb-4">Ảnh đã upload ({uploadedImages.length})</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {uploadedImages.map((image, i) => {
+                                            const platform = IMAGE_PLATFORMS.find(p => p.id === image.platform);
+                                            return (
+                                                <div key={i} className={`rounded-xl p-3 border ${image.isValid ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        {platform && (typeof platform.icon === 'function' ? <platform.icon size={14} /> : <platform.icon size={14} style={{ color: platform.color }} />)}
+                                                        <span className="text-sm font-medium">{image.sizeName}</span>
+                                                        {image.isValid ? <Check size={12} className="text-green-400" /> : <AlertCircle size={12} className="text-red-400" />}
+                                                    </div>
+                                                    <img src={image.url} alt={image.sizeName} className="w-full rounded-lg mb-2 object-cover" style={{ maxHeight: '120px' }} />
+                                                    <p className="text-xs text-white/50">{image.width}x{image.height}</p>
+                                                    {!image.isValid && <p className="text-xs text-red-400 mt-1">⚠️ {image.errors.join(', ')}</p>}
                                                 </div>
                                             );
                                         })}
@@ -772,10 +739,10 @@ export default function CreativeStudioPage() {
                 {/* Bottom Action */}
                 <div className="mt-8 flex justify-between">
                     <button onClick={() => window.location.href = '/app/campaign'} className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl flex items-center gap-2">
-                        <ArrowLeft size={18} /> Quay lại
+                        <ArrowLeft size={18} /> Quay lại Chiến lược
                     </button>
-                    <button onClick={handleConfirmAndLaunch} className="px-8 py-3 rounded-xl font-bold flex items-center gap-2" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
-                        <Check size={18} /> Xác nhận & Tiếp tục <ChevronRight size={18} />
+                    <button onClick={handleConfirmAndContinue} className="px-8 py-3 rounded-xl font-bold flex items-center gap-2" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                        <Check size={18} /> Tiếp: Cài đặt Ads <ChevronRight size={18} />
                     </button>
                 </div>
             </div>
