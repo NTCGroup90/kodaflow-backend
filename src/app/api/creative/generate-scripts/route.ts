@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generatePlatformScripts, Platform, BrandDNA } from '@/lib/creative/script-generator';
+import { generateViralScripts, Platform, BrandDNA } from '@/lib/creative/script-generator';
 
-// API to generate platform-specific video scripts
+// API to generate pro-quality viral video scripts
 
 export async function POST(request: NextRequest) {
     try {
@@ -33,14 +33,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const scripts = await generatePlatformScripts(brandDNA, platforms, geminiApiKey);
+        // Generate viral scripts with deep DNA integration
+        const scripts = await generateViralScripts(brandDNA, platforms, geminiApiKey);
 
         return NextResponse.json({
             success: true,
             data: {
                 scripts,
                 brandName: brandDNA.brandName,
-                generatedAt: new Date().toISOString()
+                generatedAt: new Date().toISOString(),
+                note: 'Scripts optimized for viral potential and conversion'
             }
         });
 
