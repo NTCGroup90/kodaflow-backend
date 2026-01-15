@@ -8,6 +8,7 @@ import {
     Layout, TrendingUp, Clock, Volume2, Type, Image as ImageIcon,
     ChevronDown, ChevronUp, Save, ArrowLeft, Rocket
 } from 'lucide-react';
+import ProNav from '@/components/ProNav';
 
 // ==================== TYPES ====================
 
@@ -296,12 +297,15 @@ export default function CampaignArchitectPage() {
                         })}
                     </div>
 
-                    <button
-                        onClick={() => window.location.href = '/app/dna'}
-                        className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm flex items-center gap-2"
-                    >
-                        <ArrowLeft size={14} /> Quay lại DNA
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <ProNav currentPage="campaign" />
+                        <button
+                            onClick={() => window.location.href = '/app/dna'}
+                            className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm flex items-center gap-2"
+                        >
+                            <ArrowLeft size={14} /> Quay lại DNA
+                        </button>
+                    </div>
                 </div>
             </header>
 

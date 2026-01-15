@@ -7,6 +7,7 @@ import {
     ArrowLeft, Rocket, Sparkles, FileVideo, Copy, Loader2, X, AlertCircle,
     Youtube, Facebook, Maximize2, Edit3, Zap, Target, TrendingUp, ImagePlus
 } from 'lucide-react';
+import ProNav from '@/components/ProNav';
 
 // Platform types - Removed Instagram
 type Platform = 'tiktok' | 'youtube_shorts' | 'youtube_preroll' | 'facebook_reels' | 'facebook_feed';
@@ -386,6 +387,7 @@ export default function CreativeStudioPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <ProNav currentPage="creative" />
                         <button onClick={() => window.location.href = '/app/campaign'} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm flex items-center gap-2">
                             <ArrowLeft size={14} /> Chiến lược
                         </button>

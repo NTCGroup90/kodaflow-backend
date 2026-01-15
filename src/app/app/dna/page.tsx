@@ -8,6 +8,7 @@ import {
     Check, X, Plus, Trash2, Star, MessageSquare, Loader2,
     Building2, Lightbulb, Crosshair, TrendingUp, AlertTriangle
 } from 'lucide-react';
+import ProNav from '@/components/ProNav';
 
 // ==================== TYPES ====================
 
@@ -205,23 +206,26 @@ export default function BrandDNAPage() {
                     </div>
 
                     {/* Step Indicator */}
-                    <div className="flex items-center gap-2">
-                        {['Input', 'Identity', 'Assets', 'Competitors'].map((label, i) => {
-                            const stepMap: Step[] = ['input', 'identity', 'assets', 'competitors'];
-                            const isActive = step === stepMap[i] || step === 'analyzing';
-                            const isPast = stepMap.indexOf(step as Step) > i;
-                            return (
-                                <div key={label} className="flex items-center gap-2">
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${isPast ? 'bg-green-500 text-white' :
-                                        isActive ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white' :
-                                            'bg-white/10 text-white/40'
-                                        }`}>
-                                        {isPast ? <Check size={14} /> : i + 1}
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            {['Input', 'Identity', 'Assets', 'Competitors'].map((label, i) => {
+                                const stepMap: Step[] = ['input', 'identity', 'assets', 'competitors'];
+                                const isActive = step === stepMap[i] || step === 'analyzing';
+                                const isPast = stepMap.indexOf(step as Step) > i;
+                                return (
+                                    <div key={label} className="flex items-center gap-2">
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${isPast ? 'bg-green-500 text-white' :
+                                            isActive ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white' :
+                                                'bg-white/10 text-white/40'
+                                            }`}>
+                                            {isPast ? <Check size={14} /> : i + 1}
+                                        </div>
+                                        {i < 3 && <div className={`w-8 h-0.5 ${isPast ? 'bg-green-500' : 'bg-white/10'}`} />}
                                     </div>
-                                    {i < 3 && <div className={`w-8 h-0.5 ${isPast ? 'bg-green-500' : 'bg-white/10'}`} />}
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
+                        <ProNav currentPage="dna" />
                     </div>
                 </div>
             </header>
