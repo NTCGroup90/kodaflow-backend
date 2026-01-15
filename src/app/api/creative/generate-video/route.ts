@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
                     }
                 );
 
-                videoUrl = output as string;
+                videoUrl = Array.isArray(output) ? output[0] : String(output);
             } catch (err) {
                 console.log('Replicate video generation failed, falling back to storyboard:', err);
             }
