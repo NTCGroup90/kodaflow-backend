@@ -2,319 +2,245 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import html2canvas from 'html2canvas';
 import {
-    Palette, Video, Image as ImageIcon, Layers, Play, Pause,
-    Download, Check, ChevronRight, ArrowLeft, Rocket,
-    Sparkles, Music, Edit3, Copy, Loader2,
-    Maximize2, Minimize2, RotateCcw, X
+    Palette, Video, Image as ImageIcon, Upload, Download, Check, ChevronRight,
+    ArrowLeft, Rocket, Sparkles, FileVideo, Copy, Loader2, X, AlertCircle,
+    Youtube, Facebook, Instagram, Maximize2, Minimize2, RefreshCw, Eye
 } from 'lucide-react';
-import { MUSIC_LIBRARY, getMusicByMood, getRecommendedForBrand, MusicTrack } from '@/lib/creative/music-library';
 
-// ==================== TYPES ====================
+// Platform types
+type Platform = 'tiktok' | 'youtube_shorts' | 'youtube_preroll' | 'facebook_reels' | 'facebook_feed' | 'instagram_reels';
 
-interface VideoScene {
-    sceneNumber: number;
-    durationSeconds: number;
-    visual: string;
-    voiceover: string;
-    textOverlay: string;
-    musicNote: string;
-    transition: string;
-}
-
-interface CampaignData {
-    angle: { id: string; title: string; angleType: string };
-    adCopy: { headlines: string[]; descriptions: string[]; callToAction: string };
-    videoScript: {
-        scenes: VideoScene[];
+interface VideoScript {
+    platform: string;
+    duration: string;
+    aspectRatio: string;
+    scenes: Array<{
+        timeRange: string;
+        type: string;
         duration: number;
-        hook: string;
-        callToAction: string;
-        suggestedMusic: string;
-    };
+        visual: string;
+        voiceover: string;
+        textOverlay: string;
+        transition: string;
+    }>;
+    aiPrompt: string;
+    suggestedMusic: string;
+    captionText: string;
+    conversionTips: string[];
 }
 
-interface BannerTemplate {
-    id: string;
-    name: string;
+interface UploadedVideo {
+    platform: Platform;
+    file: File;
+    url: string;
+    duration: number;
     width: number;
     height: number;
-    platform: string;
+    isValid: boolean;
+    errors: string[];
 }
 
-const BANNER_TEMPLATES: BannerTemplate[] = [
-    { id: 'fb_feed', name: 'Facebook Feed', width: 1200, height: 628, platform: 'facebook' },
-    { id: 'fb_square', name: 'Facebook Square', width: 1080, height: 1080, platform: 'facebook' },
-    { id: 'ig_story', name: 'Instagram Story', width: 1080, height: 1920, platform: 'instagram' },
-    { id: 'google_display', name: 'Google Display', width: 300, height: 250, platform: 'google' }
+const PLATFORMS: { id: Platform; name: string; icon: any; color: string }[] = [
+    { id: 'tiktok', name: 'TikTok', icon: Video, color: '#00f2ea' },
+    { id: 'youtube_shorts', name: 'YT Shorts', icon: Youtube, color: '#ff0000' },
+    { id: 'youtube_preroll', name: 'YT Pre-roll', icon: Youtube, color: '#ff0000' },
+    { id: 'facebook_reels', name: 'FB Reels', icon: Facebook, color: '#1877f2' },
+    { id: 'facebook_feed', name: 'FB Feed', icon: Facebook, color: '#1877f2' },
+    { id: 'instagram_reels', name: 'IG Reels', icon: Instagram, color: '#e4405f' }
 ];
 
-// ==================== MAIN COMPONENT ====================
+const VIDEO_SPECS: Record<Platform, { aspectRatio: string; minDuration: number; maxDuration: number; resolution: string }> = {
+    tiktok: { aspectRatio: '9:16', minDuration: 5, maxDuration: 60, resolution: '720x1280' },
+    youtube_shorts: { aspectRatio: '9:16', minDuration: 15, maxDuration: 60, resolution: '720x1280' },
+    youtube_preroll: { aspectRatio: '16:9', minDuration: 6, maxDuration: 180, resolution: '1920x1080' },
+    facebook_reels: { aspectRatio: '9:16', minDuration: 15, maxDuration: 90, resolution: '720x1280' },
+    facebook_feed: { aspectRatio: '1:1 / 4:5', minDuration: 1, maxDuration: 240, resolution: '720p' },
+    instagram_reels: { aspectRatio: '9:16', minDuration: 15, maxDuration: 90, resolution: '720x1280' }
+};
 
 export default function CreativeStudioPage() {
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [campaignData, setCampaignData] = useState<CampaignData | null>(null);
     const [brandDNA, setBrandDNA] = useState<any>(null);
-    const [assets, setAssets] = useState<any[]>([]);
+    const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['tiktok', 'facebook_reels']);
+    const [activeTab, setActiveTab] = useState<'scripts' | 'banners' | 'uploads'>('scripts');
 
-    // Banner Editor State
-    const [selectedTemplate, setSelectedTemplate] = useState<BannerTemplate>(BANNER_TEMPLATES[0]);
-    const [editingText, setEditingText] = useState<string | null>(null);
-    const [bannerHeadline, setBannerHeadline] = useState('');
-    const [bannerSubheadline, setBannerSubheadline] = useState('');
-    const [bannerCTA, setBannerCTA] = useState('');
-    const [isExportingBanner, setIsExportingBanner] = useState(false);
-    const bannerRef = useRef<HTMLDivElement>(null);
+    // Scripts state
+    const [scripts, setScripts] = useState<VideoScript[]>([]);
+    const [isGeneratingScripts, setIsGeneratingScripts] = useState(false);
+    const [activeScriptPlatform, setActiveScriptPlatform] = useState<Platform | null>(null);
 
-    // Video Preview State
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [currentScene, setCurrentScene] = useState(0);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [expandedPanel, setExpandedPanel] = useState<'banner' | 'video' | null>(null);
-    const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+    // Banner state
+    const [bannerData, setBannerData] = useState<any>(null);
+    const [isGeneratingBanner, setIsGeneratingBanner] = useState(false);
+    const [selectedBannerSize, setSelectedBannerSize] = useState('fb_feed');
 
-    // Music State
-    const [showMusicModal, setShowMusicModal] = useState(false);
-    const [selectedMusic, setSelectedMusic] = useState<MusicTrack | null>(null);
-    const [isPlayingMusic, setIsPlayingMusic] = useState(false);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
+    // Upload state
+    const [uploadedVideos, setUploadedVideos] = useState<UploadedVideo[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadPlatform, setUploadPlatform] = useState<Platform>('tiktok');
 
-    // Load campaign data on mount
+    // Load brand DNA
     useEffect(() => {
-        loadCampaignData();
+        const storedDNA = localStorage.getItem('kodaflow_brand_dna');
+        if (storedDNA) {
+            setBrandDNA(JSON.parse(storedDNA));
+        }
+        setIsLoading(false);
     }, []);
 
-    const loadCampaignData = () => {
-        setIsLoading(true);
+    // Generate scripts for selected platforms
+    const handleGenerateScripts = async () => {
+        if (!brandDNA) return;
+
+        setIsGeneratingScripts(true);
         try {
-            const storedCampaign = localStorage.getItem('kodaflow_campaign');
-            const storedDNA = localStorage.getItem('kodaflow_brand_dna');
-            const storedAssets = localStorage.getItem('kodaflow_assets');
-
-            if (!storedCampaign) {
-                setError('Không tìm thấy dữ liệu chiến dịch. Vui lòng quay lại Campaign Architect.');
-                setIsLoading(false);
-                return;
-            }
-
-            const campaign = JSON.parse(storedCampaign);
-            const dna = storedDNA ? JSON.parse(storedDNA) : null;
-            const assetList = storedAssets ? JSON.parse(storedAssets) : [];
-
-            setCampaignData(campaign);
-            setBrandDNA(dna);
-            setAssets(assetList);
-
-            // Initialize banner text from ad copy
-            if (campaign.adCopy) {
-                setBannerHeadline(campaign.adCopy.headlines[0] || '');
-                setBannerSubheadline(campaign.adCopy.descriptions[0] || '');
-                setBannerCTA(campaign.adCopy.callToAction || 'Tìm hiểu ngay');
-            }
-
-            // Get recommended music based on brand tone
-            if (dna?.toneOfVoice) {
-                const recommended = getRecommendedForBrand(dna.toneOfVoice);
-                if (recommended.length > 0) {
-                    setSelectedMusic(recommended[0]);
-                }
-            }
-
-            setIsLoading(false);
-        } catch (err) {
-            console.error('Failed to load campaign data:', err);
-            setError('Có lỗi khi tải dữ liệu');
-            setIsLoading(false);
-        }
-    };
-
-    // Video playback
-    useEffect(() => {
-        let interval: NodeJS.Timeout;
-
-        if (isPlaying && campaignData?.videoScript) {
-            const scenes = campaignData.videoScript.scenes;
-            const totalDuration = scenes.reduce((sum, s) => sum + s.durationSeconds, 0);
-
-            interval = setInterval(() => {
-                setCurrentTime(prev => {
-                    const next = prev + 0.1;
-                    if (next >= totalDuration) {
-                        setIsPlaying(false);
-                        return 0;
-                    }
-
-                    let accum = 0;
-                    for (let i = 0; i < scenes.length; i++) {
-                        accum += scenes[i].durationSeconds;
-                        if (next < accum) {
-                            setCurrentScene(i);
-                            break;
-                        }
-                    }
-
-                    return next;
-                });
-            }, 100);
-        }
-
-        return () => clearInterval(interval);
-    }, [isPlaying, campaignData]);
-
-    const getTotalDuration = () => {
-        if (!campaignData?.videoScript?.scenes) return 0;
-        return campaignData.videoScript.scenes.reduce((sum, s) => sum + s.durationSeconds, 0);
-    };
-
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    // ==================== REAL EXPORT FUNCTIONS ====================
-
-    const handleExportBanner = async () => {
-        if (!bannerRef.current) return;
-
-        setIsExportingBanner(true);
-        try {
-            const canvas = await html2canvas(bannerRef.current, {
-                scale: 2,
-                backgroundColor: '#0a0a0f',
-                logging: false,
-            });
-
-            const link = document.createElement('a');
-            link.download = `${brandDNA?.brandName || 'banner'}_${selectedTemplate.id}_${Date.now()}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-        } catch (err) {
-            console.error('Export failed:', err);
-            alert('Không thể xuất banner. Vui lòng thử lại.');
-        } finally {
-            setIsExportingBanner(false);
-        }
-    };
-
-    const handleExportVideo = async () => {
-        if (!campaignData?.videoScript) return;
-
-        setIsGeneratingVideo(true);
-        try {
-            const response = await fetch('/api/creative/generate-video', {
+            const response = await fetch('/api/creative/generate-scripts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    scenes: campaignData.videoScript.scenes,
                     brandDNA: {
-                        brandName: brandDNA?.brandName || 'Brand',
-                        tagline: brandDNA?.selectedTagline || '',
-                        brandColors: brandDNA?.brandColors || ['#00d4ff', '#a855f7'],
-                        logo: brandDNA?.logo
+                        brandName: brandDNA.brandName,
+                        selectedTagline: brandDNA.selectedTagline || brandDNA.tagline,
+                        coreValues: brandDNA.coreValues || [],
+                        targetAudience: brandDNA.targetAudience || '',
+                        painPoints: brandDNA.painPoints || [],
+                        uniqueSellingPoints: brandDNA.uniqueSellingPoints || [],
+                        toneOfVoice: brandDNA.toneOfVoice || [],
+                        industryCategory: brandDNA.industryCategory || '',
+                        brandColors: brandDNA.brandColors || []
                     },
-                    assets: assets,
-                    musicTrackId: selectedMusic?.id,
-                    duration: getTotalDuration()
+                    platforms: selectedPlatforms
                 })
             });
 
             const result = await response.json();
-
             if (result.success) {
-                if (result.data.videoUrl) {
-                    // Download actual video
-                    window.open(result.data.videoUrl, '_blank');
-                    alert('Video đã được tạo! Đang mở trong tab mới...');
-                } else {
-                    // Save storyboard data
-                    localStorage.setItem('kodaflow_storyboard', JSON.stringify(result.data));
-                    alert('Storyboard đã được lưu! Video sẽ được render bởi server.');
+                setScripts(result.data.scripts);
+                if (result.data.scripts.length > 0) {
+                    setActiveScriptPlatform(result.data.scripts[0].platform as Platform);
                 }
-            } else {
-                throw new Error(result.error);
             }
-        } catch (err: any) {
-            console.error('Video generation failed:', err);
-            alert('Đang lưu storyboard... (Video render cần thời gian)');
+        } catch (error) {
+            console.error('Error generating scripts:', error);
         } finally {
-            setIsGeneratingVideo(false);
+            setIsGeneratingScripts(false);
         }
     };
 
-    const handlePlayMusic = (track: MusicTrack) => {
-        if (audioRef.current) {
-            audioRef.current.pause();
+    // Generate banner
+    const handleGenerateBanner = async () => {
+        if (!brandDNA) return;
+
+        setIsGeneratingBanner(true);
+        try {
+            const response = await fetch('/api/creative/generate-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'banner',
+                    brandDNA: {
+                        brandName: brandDNA.brandName,
+                        tagline: brandDNA.selectedTagline || brandDNA.tagline,
+                        brandColors: brandDNA.brandColors || [],
+                        coreValues: brandDNA.coreValues || [],
+                        industryCategory: brandDNA.industryCategory || '',
+                        toneOfVoice: brandDNA.toneOfVoice || []
+                    },
+                    platform: selectedBannerSize
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                setBannerData(result.data);
+            }
+        } catch (error) {
+            console.error('Error generating banner:', error);
+        } finally {
+            setIsGeneratingBanner(false);
         }
-
-        audioRef.current = new Audio(track.url);
-        audioRef.current.play();
-        setIsPlayingMusic(true);
-        setSelectedMusic(track);
-
-        audioRef.current.onended = () => setIsPlayingMusic(false);
     };
 
-    const handleStopMusic = () => {
-        if (audioRef.current) {
-            audioRef.current.pause();
-            setIsPlayingMusic(false);
-        }
+    // Handle video upload
+    const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+
+        video.onloadedmetadata = () => {
+            window.URL.revokeObjectURL(video.src);
+
+            const specs = VIDEO_SPECS[uploadPlatform];
+            const errors: string[] = [];
+
+            // Validate duration
+            if (video.duration < specs.minDuration) {
+                errors.push(`Video quá ngắn. Tối thiểu ${specs.minDuration}s`);
+            }
+            if (video.duration > specs.maxDuration) {
+                errors.push(`Video quá dài. Tối đa ${specs.maxDuration}s`);
+            }
+
+            // Validate aspect ratio
+            const ratio = video.videoWidth / video.videoHeight;
+            if (uploadPlatform === 'youtube_preroll') {
+                if (Math.abs(ratio - 16 / 9) > 0.1) {
+                    errors.push('Video phải có tỉ lệ 16:9');
+                }
+            } else if (['tiktok', 'youtube_shorts', 'facebook_reels', 'instagram_reels'].includes(uploadPlatform)) {
+                if (Math.abs(ratio - 9 / 16) > 0.1) {
+                    errors.push('Video phải có tỉ lệ 9:16 (dọc)');
+                }
+            }
+
+            const uploadedVideo: UploadedVideo = {
+                platform: uploadPlatform,
+                file,
+                url: URL.createObjectURL(file),
+                duration: video.duration,
+                width: video.videoWidth,
+                height: video.videoHeight,
+                isValid: errors.length === 0,
+                errors
+            };
+
+            setUploadedVideos(prev => [...prev.filter(v => v.platform !== uploadPlatform), uploadedVideo]);
+        };
+
+        video.src = URL.createObjectURL(file);
     };
 
+    // Copy prompt to clipboard
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+    };
+
+    // Get brand colors
+    const primaryColor = brandDNA?.brandColors?.[0] || '#00d4ff';
+    const secondaryColor = brandDNA?.brandColors?.[1] || '#a855f7';
+
+    // Save and continue
     const handleConfirmAndLaunch = () => {
         localStorage.setItem('kodaflow_creatives', JSON.stringify({
-            banner: {
-                template: selectedTemplate,
-                headline: bannerHeadline,
-                subheadline: bannerSubheadline,
-                cta: bannerCTA,
-                brandColors: brandDNA?.brandColors
-            },
-            video: campaignData?.videoScript,
-            music: selectedMusic
+            scripts,
+            bannerData,
+            uploadedVideos: uploadedVideos.map(v => ({
+                platform: v.platform,
+                fileName: v.file.name,
+                duration: v.duration,
+                isValid: v.isValid
+            }))
         }));
         window.location.href = '/app/launch';
     };
 
-    // Get primary brand colors for styling
-    const primaryColor = brandDNA?.brandColors?.[0] || '#00d4ff';
-    const secondaryColor = brandDNA?.brandColors?.[1] || '#a855f7';
-
-    // ==================== RENDER ====================
-
     if (isLoading) {
         return (
             <main className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0d1117] to-[#0a0a0f] text-white flex items-center justify-center">
-                <div className="text-center">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center mx-auto mb-6 animate-pulse">
-                        <Palette size={40} />
-                    </div>
-                    <h2 className="text-2xl font-bold mb-2">Đang tải Creative Studio...</h2>
-                    <p className="text-white/60">Chuẩn bị công cụ sáng tạo</p>
-                </div>
-            </main>
-        );
-    }
-
-    if (error) {
-        return (
-            <main className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0d1117] to-[#0a0a0f] text-white flex items-center justify-center">
-                <div className="text-center">
-                    <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-6">
-                        <Palette className="text-red-400" size={40} />
-                    </div>
-                    <h2 className="text-2xl font-bold mb-2 text-red-400">Có lỗi xảy ra</h2>
-                    <p className="text-white/60 mb-6">{error}</p>
-                    <button
-                        onClick={() => window.location.href = '/app/campaign'}
-                        className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl font-semibold"
-                    >
-                        Quay lại Campaign Architect
-                    </button>
-                </div>
+                <Loader2 className="w-12 h-12 animate-spin" style={{ color: primaryColor }} />
             </main>
         );
     }
@@ -329,8 +255,8 @@ export default function CreativeStudioPage() {
                             <Palette size={20} />
                         </div>
                         <div>
-                            <h1 className="text-lg font-bold">Creative Studio</h1>
-                            <p className="text-xs text-white/50">Module 4 - Xưởng sáng tạo</p>
+                            <h1 className="text-lg font-bold">Creative Studio 2.0</h1>
+                            <p className="text-xs text-white/50">{brandDNA?.brandName || 'Module 4'}</p>
                         </div>
                     </div>
 
@@ -343,7 +269,7 @@ export default function CreativeStudioPage() {
                         </button>
                         <button
                             onClick={handleConfirmAndLaunch}
-                            className="px-6 py-2 rounded-lg font-semibold flex items-center gap-2 hover:shadow-lg transition-all"
+                            className="px-6 py-2 rounded-lg font-semibold flex items-center gap-2"
                             style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
                         >
                             <Rocket size={16} /> Confirm & Launch
@@ -353,525 +279,380 @@ export default function CreativeStudioPage() {
             </header>
 
             <div className="max-w-7xl mx-auto px-6 py-6">
-                {/* Campaign Info Bar */}
-                <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-4 mb-6 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
-                            <Sparkles size={18} />
-                        </div>
-                        <div>
-                            <h3 className="font-semibold">{campaignData?.angle?.title || 'Chiến dịch'}</h3>
-                            <p className="text-sm text-white/50">{brandDNA?.brandName || 'Brand'}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-6 text-sm text-white/60">
-                        <span className="flex items-center gap-2">
-                            <ImageIcon size={14} /> {assets.length} ảnh
-                        </span>
-                        <span className="flex items-center gap-2">
-                            <Video size={14} /> {campaignData?.videoScript?.scenes?.length || 0} cảnh
-                        </span>
-                        {selectedMusic && (
-                            <span className="flex items-center gap-2 text-cyan-400">
-                                <Music size={14} /> {selectedMusic.name}
-                            </span>
-                        )}
-                    </div>
+                {/* Tab Navigation */}
+                <div className="flex gap-2 mb-6">
+                    {[
+                        { id: 'scripts', label: 'Kịch bản Video', icon: FileVideo },
+                        { id: 'banners', label: 'Banner & Logo', icon: ImageIcon },
+                        { id: 'uploads', label: 'Upload Video', icon: Upload }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as any)}
+                            className={`px-6 py-3 rounded-xl font-medium flex items-center gap-2 transition-all ${activeTab === tab.id ? 'text-white' : 'bg-white/5 text-white/60 hover:bg-white/10'
+                                }`}
+                            style={activeTab === tab.id ? { background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` } : {}}
+                        >
+                            <tab.icon size={18} /> {tab.label}
+                        </button>
+                    ))}
                 </div>
 
-                {/* Main Content - Dual Panel */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* ==================== BANNER EDITOR PANEL ==================== */}
-                    <div className={`bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden ${expandedPanel === 'banner' ? 'lg:col-span-2' : ''}`}>
-                        <div className="flex items-center justify-between p-4 border-b border-white/10">
-                            <h3 className="font-bold flex items-center gap-2">
-                                <ImageIcon className="text-purple-400" size={18} /> Banner Editor
-                            </h3>
-                            <button
-                                onClick={() => setExpandedPanel(expandedPanel === 'banner' ? null : 'banner')}
-                                className="p-2 hover:bg-white/10 rounded-lg"
-                            >
-                                {expandedPanel === 'banner' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                            </button>
-                        </div>
-
-                        {/* Template Selector */}
-                        <div className="p-4 border-b border-white/10">
-                            <div className="flex gap-2 overflow-x-auto pb-2">
-                                {BANNER_TEMPLATES.map(template => (
-                                    <button
-                                        key={template.id}
-                                        onClick={() => setSelectedTemplate(template)}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${selectedTemplate.id === template.id
-                                                ? 'text-white'
-                                                : 'bg-white/5 text-white/60 hover:bg-white/10'
-                                            }`}
-                                        style={selectedTemplate.id === template.id ? { background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` } : {}}
-                                    >
-                                        {template.name}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Canvas Preview */}
-                        <div className="p-6">
-                            <div
-                                ref={bannerRef}
-                                className="relative mx-auto rounded-xl overflow-hidden border border-white/10"
-                                style={{
-                                    width: '100%',
-                                    maxWidth: selectedTemplate.width > selectedTemplate.height ? '100%' : '300px',
-                                    aspectRatio: `${selectedTemplate.width} / ${selectedTemplate.height}`,
-                                    background: `linear-gradient(135deg, ${primaryColor}20 0%, ${secondaryColor}20 100%)`
-                                }}
-                            >
-                                {/* Background Image from Assets */}
-                                {assets[0]?.url && (
-                                    <div
-                                        className="absolute inset-0 opacity-30"
-                                        style={{
-                                            backgroundImage: `url(${assets[0].url})`,
-                                            backgroundSize: 'cover',
-                                            backgroundPosition: 'center'
-                                        }}
-                                    />
-                                )}
-
-                                {/* Banner Content */}
-                                <div className="absolute inset-0 p-6 flex flex-col justify-center">
-                                    {/* Headline */}
-                                    <div
-                                        className={`mb-4 cursor-pointer transition-all ${editingText === 'headline' ? 'ring-2 ring-cyan-500 rounded p-1' : ''}`}
-                                        onClick={() => setEditingText('headline')}
-                                    >
-                                        {editingText === 'headline' ? (
-                                            <input
-                                                type="text"
-                                                value={bannerHeadline}
-                                                onChange={(e) => setBannerHeadline(e.target.value)}
-                                                onBlur={() => setEditingText(null)}
-                                                autoFocus
-                                                className="w-full bg-transparent text-2xl font-bold focus:outline-none"
-                                            />
-                                        ) : (
-                                            <h2 className="text-2xl font-bold group">
-                                                {bannerHeadline || 'Click để thêm tiêu đề'}
-                                                <Edit3 size={14} className="inline ml-2 opacity-0 group-hover:opacity-100 text-cyan-400" />
-                                            </h2>
-                                        )}
-                                    </div>
-
-                                    {/* Subheadline */}
-                                    <div
-                                        className={`mb-6 cursor-pointer transition-all ${editingText === 'subheadline' ? 'ring-2 ring-cyan-500 rounded p-1' : ''}`}
-                                        onClick={() => setEditingText('subheadline')}
-                                    >
-                                        {editingText === 'subheadline' ? (
-                                            <input
-                                                type="text"
-                                                value={bannerSubheadline}
-                                                onChange={(e) => setBannerSubheadline(e.target.value)}
-                                                onBlur={() => setEditingText(null)}
-                                                autoFocus
-                                                className="w-full bg-transparent text-white/70 focus:outline-none"
-                                            />
-                                        ) : (
-                                            <p className="text-white/70 group">
-                                                {bannerSubheadline || 'Click để thêm mô tả'}
-                                                <Edit3 size={12} className="inline ml-2 opacity-0 group-hover:opacity-100 text-cyan-400" />
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    {/* CTA Button */}
-                                    <div
-                                        className={`inline-block cursor-pointer ${editingText === 'cta' ? 'ring-2 ring-cyan-500 rounded' : ''}`}
-                                        onClick={() => setEditingText('cta')}
-                                    >
-                                        {editingText === 'cta' ? (
-                                            <input
-                                                type="text"
-                                                value={bannerCTA}
-                                                onChange={(e) => setBannerCTA(e.target.value)}
-                                                onBlur={() => setEditingText(null)}
-                                                autoFocus
-                                                className="px-6 py-3 rounded-xl font-bold focus:outline-none"
-                                                style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
-                                            />
-                                        ) : (
-                                            <button
-                                                className="px-6 py-3 rounded-xl font-bold hover:shadow-lg transition-all"
-                                                style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
-                                            >
-                                                {bannerCTA || 'CTA Button'}
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Brand Logo */}
-                                {brandDNA?.logo && (
-                                    <div className="absolute top-4 left-4 w-16 h-16 bg-white rounded-lg p-2">
-                                        <img src={brandDNA.logo} alt="Logo" className="w-full h-full object-contain" />
-                                    </div>
-                                )}
-
-                                {/* Brand colors indicator */}
-                                <div className="absolute bottom-4 right-4 flex gap-1">
-                                    {(brandDNA?.brandColors || ['#00d4ff', '#a855f7']).slice(0, 3).map((color: string, i: number) => (
-                                        <div
-                                            key={i}
-                                            className="w-4 h-4 rounded-full border border-white/20"
-                                            style={{ backgroundColor: color }}
-                                        />
+                {/* Tab Content */}
+                <AnimatePresence mode="wait">
+                    {/* Scripts Tab */}
+                    {activeTab === 'scripts' && (
+                        <motion.div
+                            key="scripts"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="space-y-6"
+                        >
+                            {/* Platform Selection */}
+                            <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
+                                <h3 className="font-bold mb-4">Chọn nền tảng quảng cáo</h3>
+                                <div className="flex flex-wrap gap-3">
+                                    {PLATFORMS.map(platform => (
+                                        <button
+                                            key={platform.id}
+                                            onClick={() => {
+                                                setSelectedPlatforms(prev =>
+                                                    prev.includes(platform.id)
+                                                        ? prev.filter(p => p !== platform.id)
+                                                        : [...prev, platform.id]
+                                                );
+                                            }}
+                                            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all border ${selectedPlatforms.includes(platform.id)
+                                                    ? 'border-transparent text-white'
+                                                    : 'border-white/10 text-white/60 hover:border-white/30'
+                                                }`}
+                                            style={selectedPlatforms.includes(platform.id) ? { background: platform.color } : {}}
+                                        >
+                                            <platform.icon size={16} />
+                                            {platform.name}
+                                            {selectedPlatforms.includes(platform.id) && <Check size={14} />}
+                                        </button>
                                     ))}
                                 </div>
-                            </div>
 
-                            {/* Editor Tools */}
-                            <div className="flex items-center justify-between mt-4">
-                                <span className="text-xs text-white/40">
-                                    {selectedTemplate.width} × {selectedTemplate.height}
-                                </span>
-                                <div className="flex gap-2">
-                                    <button className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm flex items-center gap-2">
-                                        <Copy size={14} /> A/B Variant
-                                    </button>
-                                    <button
-                                        onClick={handleExportBanner}
-                                        disabled={isExportingBanner}
-                                        className="px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 disabled:opacity-50"
-                                        style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
-                                    >
-                                        {isExportingBanner ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                                        Export PNG
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ==================== VIDEO PREVIEW PANEL ==================== */}
-                    {expandedPanel !== 'banner' && (
-                        <div className={`bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden ${expandedPanel === 'video' ? 'lg:col-span-2' : ''}`}>
-                            <div className="flex items-center justify-between p-4 border-b border-white/10">
-                                <h3 className="font-bold flex items-center gap-2">
-                                    <Video className="text-pink-400" size={18} /> Video Shorts Preview
-                                </h3>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs text-white/40">
-                                        {formatTime(currentTime)} / {formatTime(getTotalDuration())}
-                                    </span>
-                                    <button
-                                        onClick={() => setExpandedPanel(expandedPanel === 'video' ? null : 'video')}
-                                        className="p-2 hover:bg-white/10 rounded-lg"
-                                    >
-                                        {expandedPanel === 'video' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Video Player */}
-                            <div className="p-6">
-                                <div
-                                    className="relative mx-auto rounded-xl overflow-hidden border border-white/10"
-                                    style={{
-                                        maxWidth: '280px',
-                                        aspectRatio: '9/16',
-                                        background: `linear-gradient(135deg, ${primaryColor}30 0%, ${secondaryColor}30 100%)`
-                                    }}
+                                <button
+                                    onClick={handleGenerateScripts}
+                                    disabled={isGeneratingScripts || selectedPlatforms.length === 0}
+                                    className="mt-4 px-6 py-3 rounded-xl font-semibold flex items-center gap-2 disabled:opacity-50"
+                                    style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
                                 >
-                                    {/* Background Image from Assets */}
-                                    {assets[currentScene % assets.length]?.url && (
-                                        <motion.div
-                                            key={currentScene}
-                                            initial={{ scale: 1 }}
-                                            animate={{ scale: isPlaying ? 1.1 : 1 }}
-                                            transition={{ duration: campaignData?.videoScript?.scenes?.[currentScene]?.durationSeconds || 3 }}
-                                            className="absolute inset-0 opacity-50"
-                                            style={{
-                                                backgroundImage: `url(${assets[currentScene % assets.length].url})`,
-                                                backgroundSize: 'cover',
-                                                backgroundPosition: 'center'
-                                            }}
-                                        />
-                                    )}
+                                    {isGeneratingScripts ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                                    Tạo kịch bản chuyển đổi cao
+                                </button>
+                            </div>
 
-                                    {/* Current Scene Display */}
-                                    {campaignData?.videoScript?.scenes?.[currentScene] && (
-                                        <motion.div
-                                            key={currentScene}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            className="absolute inset-0"
-                                        >
-                                            {/* Visual Description */}
-                                            <div className="absolute inset-0 flex items-center justify-center p-4">
-                                                <p className="text-center text-white/40 text-sm">
-                                                    {campaignData.videoScript.scenes[currentScene].visual}
-                                                </p>
-                                            </div>
+                            {/* Generated Scripts */}
+                            {scripts.length > 0 && (
+                                <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+                                    {/* Script Platform Tabs */}
+                                    <div className="flex border-b border-white/10 overflow-x-auto">
+                                        {scripts.map(script => {
+                                            const platform = PLATFORMS.find(p => p.id === script.platform);
+                                            return (
+                                                <button
+                                                    key={script.platform}
+                                                    onClick={() => setActiveScriptPlatform(script.platform as Platform)}
+                                                    className={`px-4 py-3 flex items-center gap-2 whitespace-nowrap transition-all ${activeScriptPlatform === script.platform
+                                                            ? 'bg-white/10 border-b-2'
+                                                            : 'text-white/60 hover:text-white'
+                                                        }`}
+                                                    style={activeScriptPlatform === script.platform ? { borderColor: platform?.color } : {}}
+                                                >
+                                                    {platform && <platform.icon size={16} style={{ color: platform.color }} />}
+                                                    {platform?.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
 
-                                            {/* Text Overlay */}
-                                            <motion.div
-                                                initial={{ y: 20, opacity: 0 }}
-                                                animate={{ y: 0, opacity: 1 }}
-                                                transition={{ delay: 0.3 }}
-                                                className="absolute bottom-20 left-4 right-4"
-                                            >
-                                                <div className="bg-black/60 backdrop-blur-sm rounded-xl p-4">
-                                                    <p className="text-lg font-bold text-center">
-                                                        {campaignData.videoScript.scenes[currentScene].textOverlay}
-                                                    </p>
-                                                </div>
-                                            </motion.div>
+                                    {/* Active Script Content */}
+                                    {scripts.find(s => s.platform === activeScriptPlatform) && (
+                                        <div className="p-6">
+                                            {(() => {
+                                                const script = scripts.find(s => s.platform === activeScriptPlatform)!;
+                                                return (
+                                                    <div className="space-y-6">
+                                                        {/* Specs */}
+                                                        <div className="flex gap-4 text-sm text-white/60">
+                                                            <span>⏱️ {script.duration}</span>
+                                                            <span>📐 {script.aspectRatio}</span>
+                                                            <span>🎵 {script.suggestedMusic}</span>
+                                                        </div>
 
-                                            {/* Scene Number */}
-                                            <div className="absolute top-4 left-4 bg-black/60 px-3 py-1 rounded-full text-xs">
-                                                Scene {currentScene + 1}/{campaignData.videoScript.scenes.length}
-                                            </div>
+                                                        {/* Scenes */}
+                                                        <div className="space-y-4">
+                                                            <h4 className="font-semibold">Kịch bản từng cảnh</h4>
+                                                            {script.scenes?.map((scene, i) => (
+                                                                <div key={i} className="bg-black/30 rounded-xl p-4 border border-white/5">
+                                                                    <div className="flex items-center gap-3 mb-2">
+                                                                        <span className="text-xs px-2 py-1 rounded-full" style={{ background: primaryColor }}>
+                                                                            {scene.timeRange}
+                                                                        </span>
+                                                                        <span className="text-sm font-medium capitalize">{scene.type}</span>
+                                                                    </div>
+                                                                    <p className="text-white/80 mb-2">🎬 {scene.visual}</p>
+                                                                    <p className="text-white/60 text-sm mb-2">🎤 "{scene.voiceover}"</p>
+                                                                    <p className="text-cyan-400 text-sm">📝 {scene.textOverlay}</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
 
-                                            {/* Brand Logo */}
-                                            {brandDNA?.logo && (
-                                                <div className="absolute top-4 right-4 w-10 h-10 bg-white rounded-lg p-1">
-                                                    <img src={brandDNA.logo} alt="Logo" className="w-full h-full object-contain" />
-                                                </div>
-                                            )}
-                                        </motion.div>
-                                    )}
+                                                        {/* AI Prompt */}
+                                                        <div className="bg-black/30 rounded-xl p-4 border border-white/5">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <h4 className="font-semibold">🤖 Prompt cho AI Video (Veo 3/Kling/Runway)</h4>
+                                                                <button
+                                                                    onClick={() => copyToClipboard(script.aiPrompt)}
+                                                                    className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-sm flex items-center gap-1"
+                                                                >
+                                                                    <Copy size={12} /> Copy
+                                                                </button>
+                                                            </div>
+                                                            <p className="text-white/70 text-sm">{script.aiPrompt}</p>
+                                                        </div>
 
-                                    {/* Play Button Overlay */}
-                                    {!isPlaying && (
-                                        <button
-                                            onClick={() => setIsPlaying(true)}
-                                            className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/30 transition-all"
-                                        >
-                                            <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
-                                                <Play size={32} className="text-white ml-1" />
-                                            </div>
-                                        </button>
+                                                        {/* Caption */}
+                                                        <div className="bg-black/30 rounded-xl p-4 border border-white/5">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <h4 className="font-semibold">📝 Caption đầy đủ</h4>
+                                                                <button
+                                                                    onClick={() => copyToClipboard(script.captionText)}
+                                                                    className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-sm flex items-center gap-1"
+                                                                >
+                                                                    <Copy size={12} /> Copy
+                                                                </button>
+                                                            </div>
+                                                            <p className="text-white/70 text-sm">{script.captionText}</p>
+                                                        </div>
+
+                                                        {/* Conversion Tips */}
+                                                        {script.conversionTips && (
+                                                            <div className="bg-green-500/10 rounded-xl p-4 border border-green-500/20">
+                                                                <h4 className="font-semibold text-green-400 mb-2">💡 Tips tăng conversion</h4>
+                                                                <ul className="space-y-1">
+                                                                    {script.conversionTips.map((tip, i) => (
+                                                                        <li key={i} className="text-sm text-white/70">• {tip}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
                                     )}
                                 </div>
+                            )}
+                        </motion.div>
+                    )}
 
-                                {/* Playback Controls */}
-                                <div className="mt-4 space-y-3">
-                                    {/* Progress Bar */}
-                                    <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full transition-all"
-                                            style={{
-                                                width: `${(currentTime / getTotalDuration()) * 100}%`,
-                                                background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})`
-                                            }}
-                                        />
-                                    </div>
+                    {/* Banners Tab */}
+                    {activeTab === 'banners' && (
+                        <motion.div
+                            key="banners"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="space-y-6"
+                        >
+                            <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
+                                <h3 className="font-bold mb-4">Tạo Banner với AI</h3>
 
-                                    {/* Controls */}
-                                    <div className="flex items-center justify-center gap-4">
+                                {/* Size Selection */}
+                                <div className="flex gap-2 mb-4">
+                                    {[
+                                        { id: 'fb_feed', name: 'FB Feed (1200x628)' },
+                                        { id: 'fb_square', name: 'Square (1080x1080)' },
+                                        { id: 'ig_story', name: 'Story (1080x1920)' }
+                                    ].map(size => (
                                         <button
-                                            onClick={() => { setCurrentTime(0); setCurrentScene(0); }}
-                                            className="p-2 hover:bg-white/10 rounded-lg"
+                                            key={size.id}
+                                            onClick={() => setSelectedBannerSize(size.id)}
+                                            className={`px-4 py-2 rounded-lg text-sm ${selectedBannerSize === size.id ? 'text-white' : 'bg-white/5 text-white/60'
+                                                }`}
+                                            style={selectedBannerSize === size.id ? { background: primaryColor } : {}}
                                         >
-                                            <RotateCcw size={16} />
+                                            {size.name}
                                         </button>
-                                        <button
-                                            onClick={() => setIsPlaying(!isPlaying)}
-                                            className="w-12 h-12 rounded-full flex items-center justify-center"
-                                            style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
-                                        >
-                                            {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-1" />}
-                                        </button>
-                                        <button
-                                            onClick={() => setShowMusicModal(true)}
-                                            className={`p-2 hover:bg-white/10 rounded-lg ${selectedMusic ? 'text-cyan-400' : ''}`}
-                                        >
-                                            <Music size={16} />
-                                        </button>
-                                    </div>
+                                    ))}
+                                </div>
 
-                                    {/* Scene Timeline */}
-                                    <div className="flex gap-1">
-                                        {campaignData?.videoScript?.scenes?.map((scene, i) => (
-                                            <button
-                                                key={i}
-                                                onClick={() => {
-                                                    let time = 0;
-                                                    for (let j = 0; j < i; j++) {
-                                                        time += campaignData.videoScript.scenes[j].durationSeconds;
-                                                    }
-                                                    setCurrentTime(time);
-                                                    setCurrentScene(i);
-                                                }}
-                                                className={`flex-1 h-8 rounded-lg text-xs font-medium transition-all ${currentScene === i ? '' : 'bg-white/10 hover:bg-white/20'
-                                                    }`}
-                                                style={currentScene === i ? { background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` } : {}}
+                                <button
+                                    onClick={handleGenerateBanner}
+                                    disabled={isGeneratingBanner}
+                                    className="px-6 py-3 rounded-xl font-semibold flex items-center gap-2 disabled:opacity-50"
+                                    style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
+                                >
+                                    {isGeneratingBanner ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                                    Generate Banner
+                                </button>
+                            </div>
+
+                            {/* Generated Banner */}
+                            {bannerData && (
+                                <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
+                                    <h4 className="font-bold mb-4">Banner Design</h4>
+
+                                    {bannerData.generatedImageUrl ? (
+                                        <img src={bannerData.generatedImageUrl} alt="Generated Banner" className="rounded-xl max-w-full" />
+                                    ) : (
+                                        <div className="space-y-4">
+                                            <div className="bg-black/30 rounded-xl p-4">
+                                                <p><strong>Headline:</strong> {bannerData.headline}</p>
+                                                <p><strong>Subheadline:</strong> {bannerData.subheadline}</p>
+                                                <p><strong>CTA:</strong> {bannerData.ctaText}</p>
+                                            </div>
+                                            <div className="bg-black/30 rounded-xl p-4">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <strong>Image Prompt (dùng cho DALL-E/Midjourney):</strong>
+                                                    <button
+                                                        onClick={() => copyToClipboard(bannerData.imagePrompt)}
+                                                        className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-sm flex items-center gap-1"
+                                                    >
+                                                        <Copy size={12} /> Copy
+                                                    </button>
+                                                </div>
+                                                <p className="text-white/70 text-sm">{bannerData.imagePrompt}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+
+                    {/* Uploads Tab */}
+                    {activeTab === 'uploads' && (
+                        <motion.div
+                            key="uploads"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="space-y-6"
+                        >
+                            <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
+                                <h3 className="font-bold mb-4">Upload Video theo Platform</h3>
+
+                                {/* Platform Selection for Upload */}
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                                    {PLATFORMS.map(platform => {
+                                        const specs = VIDEO_SPECS[platform.id];
+                                        const uploaded = uploadedVideos.find(v => v.platform === platform.id);
+
+                                        return (
+                                            <div
+                                                key={platform.id}
+                                                className={`rounded-xl p-4 border cursor-pointer transition-all ${uploadPlatform === platform.id
+                                                        ? 'border-2'
+                                                        : 'border-white/10 hover:border-white/30'
+                                                    } ${uploaded ? (uploaded.isValid ? 'bg-green-500/10' : 'bg-red-500/10') : 'bg-black/30'}`}
+                                                style={uploadPlatform === platform.id ? { borderColor: platform.color } : {}}
+                                                onClick={() => setUploadPlatform(platform.id)}
                                             >
-                                                {i + 1}
-                                            </button>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <platform.icon size={18} style={{ color: platform.color }} />
+                                                    <span className="font-medium">{platform.name}</span>
+                                                    {uploaded && (
+                                                        uploaded.isValid
+                                                            ? <Check size={14} className="text-green-400" />
+                                                            : <AlertCircle size={14} className="text-red-400" />
+                                                    )}
+                                                </div>
+                                                <div className="text-xs text-white/50 space-y-1">
+                                                    <p>📐 {specs.aspectRatio}</p>
+                                                    <p>⏱️ {specs.minDuration}-{specs.maxDuration}s</p>
+                                                    <p>📺 {specs.resolution}</p>
+                                                </div>
+                                                {uploaded && !uploaded.isValid && (
+                                                    <div className="mt-2 text-xs text-red-400">
+                                                        {uploaded.errors.join(', ')}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Upload Area */}
+                                <div
+                                    className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-white/40 transition-all cursor-pointer"
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="video/*"
+                                        onChange={handleVideoUpload}
+                                        className="hidden"
+                                    />
+                                    <Upload size={40} className="mx-auto mb-4 text-white/40" />
+                                    <p className="text-white/60 mb-2">
+                                        Kéo thả hoặc click để upload video cho <strong style={{ color: PLATFORMS.find(p => p.id === uploadPlatform)?.color }}>
+                                            {PLATFORMS.find(p => p.id === uploadPlatform)?.name}
+                                        </strong>
+                                    </p>
+                                    <p className="text-xs text-white/40">
+                                        {VIDEO_SPECS[uploadPlatform].aspectRatio} • {VIDEO_SPECS[uploadPlatform].minDuration}-{VIDEO_SPECS[uploadPlatform].maxDuration}s
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Uploaded Videos Preview */}
+                            {uploadedVideos.length > 0 && (
+                                <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
+                                    <h4 className="font-bold mb-4">Video đã upload</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {uploadedVideos.map((video, i) => (
+                                            <div key={i} className={`rounded-xl p-4 border ${video.isValid ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    {(() => {
+                                                        const platform = PLATFORMS.find(p => p.id === video.platform);
+                                                        return platform && <platform.icon size={18} style={{ color: platform.color }} />;
+                                                    })()}
+                                                    <span className="font-medium">{PLATFORMS.find(p => p.id === video.platform)?.name}</span>
+                                                    {video.isValid ? <Check size={14} className="text-green-400" /> : <AlertCircle size={14} className="text-red-400" />}
+                                                </div>
+                                                <video src={video.url} className="w-full rounded-lg mb-2" style={{ maxHeight: '200px' }} controls />
+                                                <div className="text-xs text-white/50">
+                                                    {video.width}x{video.height} • {Math.round(video.duration)}s
+                                                </div>
+                                                {!video.isValid && (
+                                                    <div className="mt-2 text-xs text-red-400">
+                                                        ⚠️ {video.errors.join(', ')}
+                                                    </div>
+                                                )}
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
-
-                                {/* Export Buttons */}
-                                <div className="flex gap-2 mt-4">
-                                    <button
-                                        onClick={() => setShowMusicModal(true)}
-                                        className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm flex items-center justify-center gap-2"
-                                    >
-                                        <Music size={14} /> {selectedMusic ? selectedMusic.name : 'Thêm nhạc'}
-                                    </button>
-                                    <button
-                                        onClick={handleExportVideo}
-                                        disabled={isGeneratingVideo}
-                                        className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                                        style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
-                                    >
-                                        {isGeneratingVideo ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                                        Export MP4
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                            )}
+                        </motion.div>
                     )}
-                </div>
+                </AnimatePresence>
 
-                {/* Storyboard Overview */}
-                {campaignData?.videoScript?.scenes && (
-                    <div className="mt-6 bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6">
-                        <h3 className="font-bold mb-4 flex items-center gap-2">
-                            <Layers className="text-cyan-400" size={18} /> Storyboard Overview
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {campaignData.videoScript.scenes.map((scene, i) => (
-                                <div
-                                    key={i}
-                                    className={`rounded-xl p-4 border transition-all cursor-pointer ${currentScene === i ? 'border-cyan-500 ring-1 ring-cyan-500/30' : 'border-white/10 hover:border-white/30'
-                                        }`}
-                                    style={{ background: currentScene === i ? `${primaryColor}20` : 'rgba(0,0,0,0.3)' }}
-                                    onClick={() => {
-                                        let time = 0;
-                                        for (let j = 0; j < i; j++) {
-                                            time += campaignData.videoScript.scenes[j].durationSeconds;
-                                        }
-                                        setCurrentTime(time);
-                                        setCurrentScene(i);
-                                    }}
-                                >
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-bold" style={{ color: primaryColor }}>Scene {scene.sceneNumber}</span>
-                                        <span className="text-xs text-white/40">{scene.durationSeconds}s</span>
-                                    </div>
-                                    <p className="text-sm font-medium mb-2 line-clamp-1">{scene.textOverlay}</p>
-                                    <p className="text-xs text-white/50 line-clamp-2">{scene.visual}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Bottom Action Bar */}
-                <div className="mt-6 flex items-center justify-between">
+                {/* Bottom Action */}
+                <div className="mt-8 flex justify-between">
                     <button
                         onClick={() => window.location.href = '/app/campaign'}
-                        className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-semibold flex items-center gap-2"
+                        className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl flex items-center gap-2"
                     >
-                        <ArrowLeft size={18} /> Quay lại Campaign
+                        <ArrowLeft size={18} /> Quay lại
                     </button>
                     <button
                         onClick={handleConfirmAndLaunch}
-                        className="px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:shadow-lg transition-all"
+                        className="px-8 py-3 rounded-xl font-bold flex items-center gap-2"
                         style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
                     >
-                        <Check size={18} /> Confirm & Move to Launch <ChevronRight size={18} />
+                        <Check size={18} /> Xác nhận & Tiếp tục <ChevronRight size={18} />
                     </button>
                 </div>
             </div>
-
-            {/* ==================== MUSIC SELECTION MODAL ==================== */}
-            <AnimatePresence>
-                {showMusicModal && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6"
-                        onClick={() => { setShowMusicModal(false); handleStopMusic(); }}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.95, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.95, opacity: 0 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-[#0d1117] border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
-                        >
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-xl font-bold flex items-center gap-2">
-                                    <Music size={20} style={{ color: primaryColor }} /> Chọn nhạc nền
-                                </h2>
-                                <button onClick={() => { setShowMusicModal(false); handleStopMusic(); }} className="p-2 hover:bg-white/10 rounded-lg">
-                                    <X size={20} />
-                                </button>
-                            </div>
-
-                            {/* Music Categories */}
-                            {(['energetic', 'corporate', 'trendy', 'inspiring', 'calm'] as const).map(mood => (
-                                <div key={mood} className="mb-6">
-                                    <h3 className="text-sm font-semibold text-white/60 mb-3 capitalize">{mood}</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                        {getMusicByMood(mood).map(track => (
-                                            <div
-                                                key={track.id}
-                                                className={`p-3 rounded-xl border cursor-pointer transition-all ${selectedMusic?.id === track.id
-                                                        ? 'border-cyan-500 bg-cyan-500/10'
-                                                        : 'border-white/10 hover:border-white/30'
-                                                    }`}
-                                                onClick={() => setSelectedMusic(track)}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <p className="font-medium">{track.name}</p>
-                                                        <p className="text-xs text-white/40">{track.artist} · {Math.floor(track.duration / 60)}:{(track.duration % 60).toString().padStart(2, '0')}</p>
-                                                    </div>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            if (isPlayingMusic && selectedMusic?.id === track.id) {
-                                                                handleStopMusic();
-                                                            } else {
-                                                                handlePlayMusic(track);
-                                                            }
-                                                        }}
-                                                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
-                                                    >
-                                                        {isPlayingMusic && selectedMusic?.id === track.id ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-
-                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-white/10">
-                                <button
-                                    onClick={() => { setShowMusicModal(false); handleStopMusic(); }}
-                                    className="px-6 py-2 bg-white/5 hover:bg-white/10 rounded-lg"
-                                >
-                                    Hủy
-                                </button>
-                                <button
-                                    onClick={() => { setShowMusicModal(false); handleStopMusic(); }}
-                                    className="px-6 py-2 rounded-lg font-semibold"
-                                    style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
-                                >
-                                    Xác nhận
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </main>
     );
 }
