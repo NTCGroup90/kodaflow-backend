@@ -4,7 +4,7 @@
  * Uses Imagen 3 for image generation
  */
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 
 
@@ -204,12 +204,15 @@ export async function callGemini(
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
+        console.error('[Gemini] CRITICAL: API Key not found!');
         throw new Error('GEMINI_API_KEY is not configured');
     }
 
+    const url = `${GEMINI_API_URL}?key=${apiKey}`;
+    console.log('[Gemini] Calling API:', GEMINI_API_URL);
+    console.log('[Gemini] Prompt length:', prompt.length, 'characters');
 
-
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+    const response = await fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -223,13 +226,21 @@ export async function callGemini(
         }),
     });
 
+    console.log('[Gemini] Response status:', response.status, response.statusText);
+
     if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Gemini API error: ${error}`);
+        const errorText = await response.text();
+        console.error('[Gemini] ==== API ERROR ====');
+        console.error('[Gemini] Status:', response.status);
+        console.error('[Gemini] Status Text:', response.statusText);
+        console.error('[Gemini] Error Body:', errorText);
+        throw new Error(`Gemini API error (${response.status}): ${errorText}`);
     }
 
     const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('[Gemini] Success! Response length:', text.length, 'chars');
+    return text;
 }
 
 // ==================== Product URL Analysis ====================

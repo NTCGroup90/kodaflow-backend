@@ -598,7 +598,7 @@ export default function LandingPage() {
                     </nav>
 
                     <Link
-                        href="/app"
+                        href="/app/dna"
                         className="px-5 py-2.5 rounded-xl font-medium text-sm text-black hover:opacity-90 transition"
                         style={{ background: 'linear-gradient(135deg, #00F0FF 0%, #A100FF 100%)' }}
                     >
@@ -832,7 +832,7 @@ export default function LandingPage() {
 
                         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.98 }}>
                             <Link
-                                href="/app"
+                                href="/app/dna"
                                 className="relative inline-flex items-center gap-3 px-10 py-5 rounded-2xl font-bold text-lg text-black"
                                 style={{ background: 'linear-gradient(135deg, #00F0FF 0%, #A100FF 100%)' }}
                             >

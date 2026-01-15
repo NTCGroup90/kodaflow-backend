@@ -294,15 +294,45 @@ OUTPUT JSON FORMAT (Bắt buộc - Chỉ JSON, không markdown):
 
     try {
         console.log('[DNA] Sending to Gemini...');
-        const response = await callGemini(prompt, { temperature: 0.7, maxTokens: 4096 });
-        console.log('[DNA] Gemini response received');
+        console.log('[DNA] Prompt length:', prompt.length, 'chars');
+
+        // Retry mechanism
+        let response = '';
+        let lastError = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                console.log(`[DNA] Attempt ${attempt}/3...`);
+                response = await callGemini(prompt, { temperature: 0.7, maxTokens: 4096 });
+                console.log('[DNA] Gemini response length:', response.length);
+                console.log('[DNA] Response preview:', response.substring(0, 500));
+                break; // Success, exit retry loop
+            } catch (retryError: any) {
+                lastError = retryError;
+                console.error(`[DNA] Attempt ${attempt} failed:`, retryError.message || retryError);
+                if (attempt < 3) {
+                    console.log('[DNA] Retrying in 2 seconds...');
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+            }
+        }
+
+        if (!response && lastError) {
+            throw lastError;
+        }
+
+        console.log('[DNA] Gemini response received successfully');
 
         // Parse JSON
         let cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error('No JSON found in response');
+        if (!jsonMatch) {
+            console.error('[DNA] No JSON found in response. Full response:', response);
+            throw new Error('No JSON found in response');
+        }
 
         const parsed = JSON.parse(jsonMatch[0]);
+        console.log('[DNA] Parsed brand name:', parsed.brandName);
+        console.log('[DNA] Parsed taglines:', parsed.taglineSuggestions);
 
         // Merge AI analysis with extracted data
         return {
@@ -320,9 +350,15 @@ OUTPUT JSON FORMAT (Bắt buộc - Chỉ JSON, không markdown):
             industryCategory: parsed.industryCategory || 'General',
         };
 
-    } catch (error) {
-        console.error('[DNA] AI analysis failed:', error);
+    } catch (error: any) {
+        console.error('[DNA] ==== AI ANALYSIS FAILED ====');
+        console.error('[DNA] Error type:', error.name);
+        console.error('[DNA] Error message:', error.message);
+        console.error('[DNA] Full error:', error);
+
+        // Return fallback but log prominently
         const domain = new URL(url).hostname.replace('www.', '');
+        console.warn('[DNA] Returning FALLBACK data for:', domain);
         return {
             ...createFallbackDNA(domain),
             brandColors: extractedColors.length > 0 ? extractedColors.slice(0, 5) : ['#00d4ff', '#a855f7', '#f97316'],

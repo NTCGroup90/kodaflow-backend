@@ -213,8 +213,8 @@ export default function BrandDNAPage() {
                             return (
                                 <div key={label} className="flex items-center gap-2">
                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${isPast ? 'bg-green-500 text-white' :
-                                            isActive ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white' :
-                                                'bg-white/10 text-white/40'
+                                        isActive ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white' :
+                                            'bg-white/10 text-white/40'
                                         }`}>
                                         {isPast ? <Check size={14} /> : i + 1}
                                     </div>
@@ -251,8 +251,8 @@ export default function BrandDNAPage() {
                                 <button
                                     onClick={() => setInputMode('url')}
                                     className={`flex-1 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${inputMode === 'url'
-                                            ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white'
-                                            : 'text-white/60 hover:text-white'
+                                        ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white'
+                                        : 'text-white/60 hover:text-white'
                                         }`}
                                 >
                                     <Link2 size={18} /> Nhập URL
@@ -260,8 +260,8 @@ export default function BrandDNAPage() {
                                 <button
                                     onClick={() => setInputMode('text')}
                                     className={`flex-1 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${inputMode === 'text'
-                                            ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white'
-                                            : 'text-white/60 hover:text-white'
+                                        ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white'
+                                        : 'text-white/60 hover:text-white'
                                         }`}
                                 >
                                     <MessageSquare size={18} /> Mô tả thủ công
@@ -407,8 +407,8 @@ export default function BrandDNAPage() {
                                                     key={i}
                                                     onClick={() => setBrandDNA(prev => ({ ...prev, selectedTagline: tag }))}
                                                     className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${brandDNA.selectedTagline === tag
-                                                            ? 'bg-purple-500/20 border-purple-500/50 text-purple-200'
-                                                            : 'bg-black/20 border-white/10 hover:border-white/20'
+                                                        ? 'bg-purple-500/20 border-purple-500/50 text-purple-200'
+                                                        : 'bg-black/20 border-white/10 hover:border-white/20'
                                                         }`}
                                                 >
                                                     "{tag}"
@@ -641,8 +641,8 @@ export default function BrandDNAPage() {
                                             key={i}
                                             onClick={() => toggleAssetSelection(i)}
                                             className={`relative aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${asset.isSelected
-                                                    ? 'border-cyan-500 ring-2 ring-cyan-500/30'
-                                                    : 'border-white/10 hover:border-white/30'
+                                                ? 'border-cyan-500 ring-2 ring-cyan-500/30'
+                                                : 'border-white/10 hover:border-white/30'
                                                 }`}
                                         >
                                             <img src={asset.url} alt={asset.alt || ''} className="w-full h-full object-cover" />
@@ -650,8 +650,8 @@ export default function BrandDNAPage() {
                                                 <Check className="text-cyan-400" size={32} />
                                             </div>
                                             <span className={`absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded ${asset.type === 'product' ? 'bg-blue-500' :
-                                                    asset.type === 'branding' ? 'bg-purple-500' :
-                                                        asset.type === 'lifestyle' ? 'bg-green-500' : 'bg-gray-500'
+                                                asset.type === 'branding' ? 'bg-purple-500' :
+                                                    asset.type === 'lifestyle' ? 'bg-green-500' : 'bg-gray-500'
                                                 }`}>
                                                 {asset.type}
                                             </span>
@@ -839,12 +839,19 @@ export default function BrandDNAPage() {
                                 >
                                     Chỉnh sửa DNA
                                 </button>
-                                <a
-                                    href="/app"
-                                    className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl font-semibold flex items-center gap-2"
+                                <button
+                                    onClick={() => {
+                                        // Save Brand DNA to localStorage for Campaign Architect
+                                        localStorage.setItem('kodaflow_brand_dna', JSON.stringify(brandDNA));
+                                        localStorage.setItem('kodaflow_competitors', JSON.stringify(competitors));
+                                        localStorage.setItem('kodaflow_assets', JSON.stringify(assets.filter(a => a.isSelected)));
+                                        // Navigate to Campaign Architect
+                                        window.location.href = '/app/campaign';
+                                    }}
+                                    className="px-8 py-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl font-bold flex items-center gap-2 hover:shadow-lg hover:shadow-orange-500/20 transition-all"
                                 >
-                                    Tạo Chiến dịch Marketing →
-                                </a>
+                                    🎯 Tiếp: Campaign Architect →
+                                </button>
                             </div>
                         </motion.div>
                     )}
