@@ -81,6 +81,11 @@ export default function CampaignArchitectPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
 
+    // Streaming progress state
+    const [progress, setProgress] = useState(0);
+    const [progressMessage, setProgressMessage] = useState('Khởi tạo...');
+    const [progressPhase, setProgressPhase] = useState('init');
+
     const [campaignPackage, setCampaignPackage] = useState<CampaignPackage | null>(null);
     const [selectedAngle, setSelectedAngle] = useState<CampaignAngle | null>(null);
     const [selectedAdCopy, setSelectedAdCopy] = useState<AdCopySet | null>(null);
@@ -101,6 +106,9 @@ export default function CampaignArchitectPage() {
     const loadCampaignData = async () => {
         setIsLoading(true);
         setError('');
+        setProgress(0);
+        setProgressMessage('Khởi tạo chiến dịch...');
+        setProgressPhase('init');
 
         try {
             // Get brand DNA from localStorage (passed from DNA page)
@@ -116,21 +124,60 @@ export default function CampaignArchitectPage() {
             const brandDNA = JSON.parse(storedDNA);
             const competitors = storedCompetitors ? JSON.parse(storedCompetitors) : [];
 
-            // Call API to generate campaign
-            const response = await fetch('/api/campaign/generate', {
+            // Use streaming API for real-time progress
+            const response = await fetch('/api/campaign/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ brandDNA, competitors })
             });
 
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error || 'Không thể tạo chiến dịch');
+            if (!response.ok) {
+                throw new Error('Failed to start campaign generation');
             }
 
-            setCampaignPackage(result.data);
-            setStep('select_angle');
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            if (!reader) {
+                throw new Error('Could not read response stream');
+            }
+
+            // Read SSE stream
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+
+                            switch (data.type) {
+                                case 'progress':
+                                    setProgress(data.progress);
+                                    setProgressMessage(data.message);
+                                    setProgressPhase(data.phase);
+                                    break;
+                                case 'complete':
+                                    if (data.success && data.data) {
+                                        setCampaignPackage(data.data);
+                                        setStep('select_angle');
+                                    }
+                                    break;
+                                case 'error':
+                                    throw new Error(data.error || 'Campaign generation failed');
+                            }
+                        } catch (parseErr) {
+                            console.warn('Failed to parse SSE data:', parseErr);
+                        }
+                    }
+                }
+            }
 
         } catch (err: any) {
             console.error('Campaign load error:', err);
@@ -200,6 +247,17 @@ export default function CampaignArchitectPage() {
         return 'text-red-400 bg-red-500/20 border-red-500/30';
     };
 
+    const getPhaseIcon = (phase: string) => {
+        switch (phase) {
+            case 'angles': return <Target className="text-orange-400" size={20} />;
+            case 'adcopy': return <FileText className="text-yellow-400" size={20} />;
+            case 'video': return <Play className="text-pink-400" size={20} />;
+            case 'landing': return <Layout className="text-cyan-400" size={20} />;
+            case 'complete': return <Check className="text-green-400" size={20} />;
+            default: return <Loader2 className="animate-spin text-white/60" size={20} />;
+        }
+    };
+
     // ==================== RENDER ====================
 
     return (
@@ -249,7 +307,7 @@ export default function CampaignArchitectPage() {
 
             <div className="max-w-7xl mx-auto px-6 py-8">
                 <AnimatePresence mode="wait">
-                    {/* ==================== LOADING ==================== */}
+                    {/* ==================== LOADING WITH PROGRESS ==================== */}
                     {step === 'loading' && (
                         <motion.div
                             key="loading"
@@ -274,21 +332,59 @@ export default function CampaignArchitectPage() {
                                 </div>
                             ) : (
                                 <>
-                                    <div className="w-24 h-24 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center mb-6 animate-pulse">
-                                        <Target size={40} />
+                                    {/* Animated Icon */}
+                                    <div className="w-24 h-24 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center mb-6 relative">
+                                        {getPhaseIcon(progressPhase)}
+                                        {/* Spinning ring */}
+                                        <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-white/50 animate-spin" />
                                     </div>
-                                    <h2 className="text-2xl font-bold mb-2">Đang xây dựng chiến dịch...</h2>
-                                    <p className="text-white/60 mb-8">AI đang tạo 3 góc tấn công dựa trên Brand DNA</p>
-                                    <div className="flex gap-8 text-sm text-white/40">
-                                        <span className="flex items-center gap-2">
-                                            <Loader2 className="animate-spin" size={14} /> Phân tích đối thủ
-                                        </span>
-                                        <span className="flex items-center gap-2">
-                                            <Loader2 className="animate-spin" size={14} /> Tạo góc tấn công
-                                        </span>
-                                        <span className="flex items-center gap-2">
-                                            <Loader2 className="animate-spin" size={14} /> Viết nội dung
-                                        </span>
+
+                                    <h2 className="text-2xl font-bold mb-2">Đang xây dựng chiến dịch</h2>
+                                    <p className="text-white/60 mb-8">{progressMessage}</p>
+
+                                    {/* Progress Bar */}
+                                    <div className="w-full max-w-md mb-6">
+                                        <div className="flex items-center justify-between text-sm mb-2">
+                                            <span className="text-white/40">Tiến độ</span>
+                                            <span className="font-bold text-orange-400">{progress}%</span>
+                                        </div>
+                                        <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                                            <motion.div
+                                                className="h-full bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 rounded-full"
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${progress}%` }}
+                                                transition={{ duration: 0.5, ease: 'easeOut' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Phase indicators */}
+                                    <div className="flex gap-6 text-sm">
+                                        {[
+                                            { id: 'angles', label: 'Góc tấn công', icon: Target },
+                                            { id: 'adcopy', label: 'Ad Copy', icon: FileText },
+                                            { id: 'video', label: 'Video Script', icon: Play },
+                                            { id: 'landing', label: 'Landing Page', icon: Layout }
+                                        ].map(({ id, label, icon: Icon }) => {
+                                            const phases = ['init', 'angles', 'adcopy', 'video', 'landing', 'complete'];
+                                            const currentPhaseIdx = phases.indexOf(progressPhase);
+                                            const thisPhaseIdx = phases.indexOf(id);
+                                            const isActive = progressPhase === id;
+                                            const isDone = currentPhaseIdx > thisPhaseIdx;
+
+                                            return (
+                                                <div key={id} className={`flex items-center gap-2 transition-all ${isActive ? 'text-orange-400' : isDone ? 'text-green-400' : 'text-white/30'}`}>
+                                                    {isDone ? (
+                                                        <Check size={16} />
+                                                    ) : isActive ? (
+                                                        <Loader2 size={16} className="animate-spin" />
+                                                    ) : (
+                                                        <Icon size={16} />
+                                                    )}
+                                                    <span>{label}</span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </>
                             )}
@@ -389,6 +485,7 @@ export default function CampaignArchitectPage() {
                             </div>
                         </motion.div>
                     )}
+
 
                     {/* ==================== AD COPY ==================== */}
                     {step === 'ad_copy' && selectedAngle && selectedAdCopy && (
