@@ -51,7 +51,18 @@ const WORKFLOW_NODES = [
 ];
 
 // ==================== FLOATING PARTICLE ====================
-function FloatingParticle({ delay = 0, size = 4 }: { delay?: number; size?: number }) {
+// ==================== FLOATING PARTICLE ====================
+function FloatingParticle({ index }: { index: number }) {
+    // Deterministic random-like values based on index
+    const random1 = ((index * 13) % 100) / 100;
+    const random2 = ((index * 23) % 100) / 100;
+    const random3 = ((index * 37) % 100) / 100;
+
+    const size = 2 + random1 * 4;
+    const initialX = random2 * 100 + '%';
+    const duration = 8 + random3 * 4;
+    const delay = index * 0.5;
+
     return (
         <motion.div
             className="absolute rounded-full"
@@ -62,7 +73,7 @@ function FloatingParticle({ delay = 0, size = 4 }: { delay?: number; size?: numb
                 boxShadow: '0 0 20px rgba(0, 240, 255, 0.5)',
             }}
             initial={{
-                x: Math.random() * 100 + '%',
+                x: initialX,
                 y: '110%',
                 opacity: 0
             }}
@@ -71,7 +82,7 @@ function FloatingParticle({ delay = 0, size = 4 }: { delay?: number; size?: numb
                 opacity: [0, 1, 1, 0],
             }}
             transition={{
-                duration: 8 + Math.random() * 4,
+                duration: duration,
                 delay: delay,
                 repeat: Infinity,
                 ease: 'linear',
@@ -133,7 +144,7 @@ function AuroraBackground() {
 
             {/* Floating particles */}
             {[...Array(20)].map((_, i) => (
-                <FloatingParticle key={i} delay={i * 0.5} size={2 + Math.random() * 4} />
+                <FloatingParticle key={i} index={i} />
             ))}
 
             {/* Subtle grid */}
@@ -533,8 +544,11 @@ export default function LandingPage() {
     };
 
     const handleAutomationComplete = () => {
-        setIsComplete(true);
-        setIsProcessing(false);
+        // Prevent state update during render risk
+        setTimeout(() => {
+            setIsComplete(true);
+            setIsProcessing(false);
+        }, 0);
     };
 
     const PRICING = [

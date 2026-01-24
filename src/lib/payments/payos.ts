@@ -57,7 +57,7 @@ export class PayOSClient {
         };
     }
 
-    private generateSignature(data: Record<string, any>): string {
+    private generateSignature(data: Record<string, string | number | boolean>): string {
         const sortedKeys = Object.keys(data).sort();
         const signData = sortedKeys.map(k => `${k}=${data[k]}`).join('&');
 
@@ -67,7 +67,7 @@ export class PayOSClient {
             .digest('hex');
     }
 
-    verifyWebhookSignature(data: Record<string, any>, signature: string): boolean {
+    verifyWebhookSignature(data: Record<string, string | number | boolean>, signature: string): boolean {
         const expectedSignature = this.generateSignature(data);
         return crypto.timingSafeEqual(
             Buffer.from(expectedSignature),
@@ -84,7 +84,7 @@ export class PayOSClient {
     }): Promise<PaymentLink> {
         const orderCodeNum = parseInt(options.orderCode.replace(/\D/g, ''));
 
-        const payload: Record<string, any> = {
+        const payload: Record<string, string | number> = {
             orderCode: orderCodeNum,
             amount: options.amount,
             description: options.description,

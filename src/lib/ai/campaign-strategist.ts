@@ -76,6 +76,7 @@ export interface VideoScriptFull {
 // Landing Page Structure
 export interface LandingPageSection {
     type: 'header' | 'hero' | 'features' | 'testimonials' | 'cta' | 'faq';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     content: Record<string, any>;
 }
 
@@ -347,6 +348,7 @@ export async function generateCampaignAngles(
         const parsed = JSON.parse(jsonMatch[0]);
 
         // Add IDs to angles
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const angles: CampaignAngle[] = parsed.angles.map((angle: any, idx: number) => ({
             id: `angle_${Date.now()}_${idx + 1}`,
             ...angle
@@ -751,10 +753,12 @@ function createFallbackLandingPage(
     };
 }
 
-export default {
+const CampaignStrategist = {
     generateCampaignAngles,
     generateAdCopy,
     generateVideoScript,
     generateLandingPage,
     generateFullCampaignPackage
 };
+
+export default CampaignStrategist;

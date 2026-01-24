@@ -122,6 +122,7 @@ export async function generateImageVariants(
         try {
             const image = await generateImage({
                 prompt: basePrompt,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 style: styles[i] as any,
                 aspectRatio: '1:1',
             });

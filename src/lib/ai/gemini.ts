@@ -55,6 +55,7 @@ export async function generateImage(
     const stylePrompt = options.style ? STYLE_PROMPTS[options.style] : '';
     const fullPrompt = `${options.prompt}, ${stylePrompt}`.trim();
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const payload: any = {
         instances: [
             {

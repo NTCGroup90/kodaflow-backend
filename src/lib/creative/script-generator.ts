@@ -271,46 +271,48 @@ DESIGN REQUIREMENTS:
 }
 
 // Video specs validation
-export function getVideoSpecs(platform: Platform): {
+export interface VideoSpec {
     aspectRatio: string;
     minDuration: number;
     maxDuration: number;
     minResolution: string;
-} {
-    const specs: Record<Platform, any> = {
-        tiktok: {
-            aspectRatio: '9:16',
-            minDuration: 5,
-            maxDuration: 60,
-            minResolution: '720x1280'
-        },
-        youtube_shorts: {
-            aspectRatio: '9:16',
-            minDuration: 15,
-            maxDuration: 60,
-            minResolution: '720x1280'
-        },
-        youtube_preroll: {
-            aspectRatio: '16:9',
-            minDuration: 6,
-            maxDuration: 180,
-            minResolution: '1920x1080'
-        },
-        facebook_reels: {
-            aspectRatio: '9:16',
-            minDuration: 15,
-            maxDuration: 90,
-            minResolution: '720x1280'
-        },
-        facebook_feed: {
-            aspectRatio: '1:1 / 4:5',
-            minDuration: 1,
-            maxDuration: 240,
-            minResolution: '720p'
-        }
-    };
+}
 
-    return specs[platform];
+const PLATFORM_VIDEO_SPECS: Record<Platform, VideoSpec> = {
+    tiktok: {
+        aspectRatio: '9:16',
+        minDuration: 5,
+        maxDuration: 60,
+        minResolution: '720x1280'
+    },
+    youtube_shorts: {
+        aspectRatio: '9:16',
+        minDuration: 15,
+        maxDuration: 60,
+        minResolution: '720x1280'
+    },
+    youtube_preroll: {
+        aspectRatio: '16:9',
+        minDuration: 6,
+        maxDuration: 180,
+        minResolution: '1920x1080'
+    },
+    facebook_reels: {
+        aspectRatio: '9:16',
+        minDuration: 15,
+        maxDuration: 90,
+        minResolution: '720x1280'
+    },
+    facebook_feed: {
+        aspectRatio: '1:1 / 4:5',
+        minDuration: 1,
+        maxDuration: 240,
+        minResolution: '720p'
+    }
+};
+
+export function getVideoSpecs(platform: Platform): VideoSpec {
+    return PLATFORM_VIDEO_SPECS[platform];
 }
 
 // Image specs for all platforms

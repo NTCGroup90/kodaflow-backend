@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient, createAdminClient } from './supabase';
+import { createServerSupabaseClient } from './supabase';
 
 // ==================== Response Helpers ====================
 

@@ -59,7 +59,8 @@ export const VIDEO_PRESETS = {
 /**
  * Generate CSS keyframes for Ken Burns effect
  */
-export function generateKenBurnsCSS(type: 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right', duration: number): string {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function generateKenBurnsCSS(type: 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right', _duration: number): string {
     const animations: Record<string, string> = {
         'zoom-in': `
             @keyframes kenBurnsZoomIn {
@@ -93,7 +94,8 @@ export function generateKenBurnsCSS(type: 'zoom-in' | 'zoom-out' | 'pan-left' | 
 /**
  * Generate CSS for text overlay animations
  */
-export function generateTextAnimationCSS(type: AnimationType, duration: number = 0.5): string {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function generateTextAnimationCSS(type: AnimationType, _duration: number = 0.5): string {
     const animations: Record<string, string> = {
         'fade-in': `
             @keyframes textFadeIn {
@@ -252,7 +254,7 @@ export function getTransitionEffect(fromScene: VideoScene, toScene: VideoScene):
     return transitions[hash];
 }
 
-export default {
+const VideoRenderer = {
     VIDEO_PRESETS,
     generateKenBurnsCSS,
     generateTextAnimationCSS,
@@ -261,3 +263,5 @@ export default {
     generateSceneAnimations,
     createExportData
 };
+
+export default VideoRenderer;

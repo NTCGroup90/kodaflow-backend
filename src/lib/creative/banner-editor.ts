@@ -215,6 +215,7 @@ export function generateBannerConfig(
             scaleX: 0.5,
             scaleY: 0.5,
             id: 'product_image'
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any);
     }
 
@@ -300,9 +301,11 @@ export function generateABVariants(design: BannerDesign): BannerDesign[] {
     return [variantA, variantB];
 }
 
-export default {
+const BannerEditor = {
     BANNER_TEMPLATES,
     generateBannerConfig,
     createBannerDesign,
     generateABVariants
 };
+
+export default BannerEditor;

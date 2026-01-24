@@ -63,6 +63,7 @@ export class MetaAdsClient {
         method: 'GET' | 'POST' | 'DELETE',
         endpoint: string,
         data?: object
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ): Promise<any> {
         const url = new URL(`${META_API_URL}/${endpoint}`);
         url.searchParams.set('access_token', this.config.accessToken);

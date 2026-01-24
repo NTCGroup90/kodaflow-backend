@@ -32,9 +32,12 @@ export async function createServerSupabaseClient() {
     );
 }
 
+import { createClient } from '@supabase/supabase-js';
+
 // Admin client with service role (bypass RLS)
 export function createAdminClient() {
-    const { createClient } = require('@supabase/supabase-js');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _noop = 0;
 
     return createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,

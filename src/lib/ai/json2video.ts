@@ -18,6 +18,7 @@ export interface VideoElement {
     type: 'image' | 'text' | 'video' | 'audio';
     src?: string;
     text?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     style?: Record<string, any>;
     start?: number;
     duration?: number;
@@ -144,7 +145,7 @@ export function createProductShowcaseVideo(options: {
             transition: { type: 'fade', duration: 0.5 },
         },
         // Product images
-        ...options.images.slice(0, 5).map((image, i) => ({
+        ...options.images.slice(0, 5).map((image) => ({
             duration: sceneDuration,
             elements: [
                 {

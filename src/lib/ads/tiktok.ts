@@ -59,6 +59,7 @@ export class TikTokAdsClient {
         method: 'GET' | 'POST',
         endpoint: string,
         data?: object
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ): Promise<any> {
         const url = `${TIKTOK_API_URL}/${endpoint}`;
 

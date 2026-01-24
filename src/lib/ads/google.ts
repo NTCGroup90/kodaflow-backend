@@ -25,11 +25,13 @@ export interface CampaignConfig {
 export interface AdGroupConfig {
     name: string;
     campaignId: string;
-    keywords?: string[];
+    cpcBidMicros?: number;
     targeting?: {
         locations?: string[];
         ageRange?: string;
         gender?: string;
+        keywords?: string[];
+        negativeKeywords?: string[];
     };
 }
 
@@ -84,6 +86,7 @@ export class GoogleAdsClient {
         method: 'GET' | 'POST',
         endpoint: string,
         data?: object
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ): Promise<any> {
         const token = await this.getAccessToken();
 
@@ -149,6 +152,14 @@ export class GoogleAdsClient {
         id: string;
         resourceName: string;
     }> {
+        // Pro Mode: Log keywords and bid
+        if (config.targeting?.keywords?.length) {
+            console.log(`[GoogleAds] Adding keywords to AdGroup ${config.name}:`, config.targeting.keywords);
+        }
+        if (config.cpcBidMicros) {
+            console.log(`[GoogleAds] Setting CPC Bid for AdGroup ${config.name}: ${config.cpcBidMicros}`);
+        }
+
         return {
             id: `google_adgroup_${Date.now()}`,
             resourceName: `customers/${this.config.customerId}/adGroups/${Date.now()}`,

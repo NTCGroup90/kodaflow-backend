@@ -168,6 +168,41 @@ export default function CampaignSetupPage() {
     const [targetGender, setTargetGender] = useState('all');
     const [targetLocations, setTargetLocations] = useState<string[]>(['Việt Nam']);
     const [targetInterests, setTargetInterests] = useState<string[]>([]);
+    // Pro Mode State
+    const [isProMode, setIsProMode] = useState(false);
+    const [keywords, setKeywords] = useState('');
+    const [negativeKeywords, setNegativeKeywords] = useState('');
+    const [bidCap, setBidCap] = useState<number>(0);
+    const [winLossRules, setWinLossRules] = useState<any[]>([
+        { id: 'rule_1', name: 'Cắt lỗ', metric: 'ROAS', operator: '<', threshold: 1.5, action: 'PAUSE_ADSET', active: true },
+        { id: 'rule_2', name: 'Scale', metric: 'ROAS', operator: '>', threshold: 4.0, action: 'INCREASE_BUDGET', active: true }
+    ]);
+
+    // Keyword Intelligence State
+    const [suggestedKeywords, setSuggestedKeywords] = useState<{ keyword: string; volume: number; cpc: number; competition: 'Low' | 'Medium' | 'High'; selected: boolean }[]>([
+        { keyword: 'tăng view youtube', volume: 12100, cpc: 2500, competition: 'Medium', selected: true },
+        { keyword: 'mua sub youtube', volume: 8200, cpc: 3200, competition: 'High', selected: true },
+        { keyword: 'bật kiếm tiền youtube', volume: 5400, cpc: 1800, competition: 'Low', selected: true },
+        { keyword: 'smm panel việt nam', volume: 3600, cpc: 2100, competition: 'Medium', selected: false },
+        { keyword: 'tăng like facebook', volume: 9800, cpc: 2800, competition: 'High', selected: false }
+    ]);
+
+    // Advanced Placements State
+    const [placements, setPlacements] = useState({
+        devices: { mobile: true, desktop: true, tablet: false },
+        facebook: { feed: true, stories: true, reels: true, messenger: false, audienceNetwork: false },
+        schedule: { allDay: true, startHour: 8, endHour: 22 }
+    });
+
+    // A/B Testing State
+    const [abTestEnabled, setAbTestEnabled] = useState(false);
+    const [abVariants, setAbVariants] = useState([
+        { id: 'A', headline: '', isControl: true },
+        { id: 'B', headline: '', isControl: false }
+    ]);
+    const [abBudget, setAbBudget] = useState(100000);
+    const [abDuration, setAbDuration] = useState(3);
+    const [abWinnerMetric, setAbWinnerMetric] = useState<'CTR' | 'CPA' | 'ROAS'>('CPA');
 
     // Account connection state
     const [connectedAccounts, setConnectedAccounts] = useState<Record<string, boolean>>({
@@ -178,6 +213,25 @@ export default function CampaignSetupPage() {
     });
 
     const [expandedSection, setExpandedSection] = useState<string | null>('budget');
+
+    // Load data
+    // Update budget allocations
+    const updateBudgetAllocations = React.useCallback((platforms: string[], budget: number, smartAlloc?: Record<string, number>) => {
+        if (platforms.length === 0) {
+            setBudgetAllocations([]);
+            return;
+        }
+
+        const allocation = smartAlloc || generateSmartAllocation(platforms, brandDNA, competitors);
+
+        const allocations = platforms.map(platformId => ({
+            platformId,
+            percentage: allocation[platformId] || Math.floor(100 / platforms.length),
+            dailyBudget: Math.floor(budget * (allocation[platformId] || Math.floor(100 / platforms.length)) / 100)
+        }));
+
+        setBudgetAllocations(allocations);
+    }, [brandDNA, competitors]);
 
     // Load data
     useEffect(() => {
@@ -203,29 +257,17 @@ export default function CampaignSetupPage() {
         if (storedCompetitors) setCompetitors(JSON.parse(storedCompetitors));
 
         // Initialize with smart allocation
-        const smartAlloc = generateSmartAllocation(['facebook', 'tiktok'], brandDNA, []);
-        updateBudgetAllocations(['facebook', 'tiktok'], 500000, smartAlloc);
-
-        setIsLoading(false);
-    }, []);
-
-    // Update budget allocations
-    const updateBudgetAllocations = (platforms: string[], budget: number, smartAlloc?: Record<string, number>) => {
-        if (platforms.length === 0) {
-            setBudgetAllocations([]);
-            return;
+        if (storedDNA) {
+            const dna = JSON.parse(storedDNA);
+            const smartAlloc = generateSmartAllocation(['facebook', 'tiktok'], dna, []);
+            updateBudgetAllocations(['facebook', 'tiktok'], 500000, smartAlloc);
+        } else {
+            const smartAlloc = generateSmartAllocation(['facebook', 'tiktok'], null, []);
+            updateBudgetAllocations(['facebook', 'tiktok'], 500000, smartAlloc);
         }
 
-        const allocation = smartAlloc || generateSmartAllocation(platforms, brandDNA, competitors);
-
-        const allocations = platforms.map(platformId => ({
-            platformId,
-            percentage: allocation[platformId] || Math.floor(100 / platforms.length),
-            dailyBudget: Math.floor(budget * (allocation[platformId] || Math.floor(100 / platforms.length)) / 100)
-        }));
-
-        setBudgetAllocations(allocations);
-    };
+        setIsLoading(false);
+    }, [updateBudgetAllocations]);
 
     const handlePlatformToggle = (platformId: string) => {
         const newPlatforms = selectedPlatforms.includes(platformId)
@@ -288,6 +330,12 @@ export default function CampaignSetupPage() {
                 locations: targetLocations,
                 interests: targetInterests
             },
+            proMode: isProMode ? {
+                keywords: keywords.split(',').map(k => k.trim()).filter(Boolean),
+                negativeKeywords: negativeKeywords.split(',').map(k => k.trim()).filter(Boolean),
+                bidCap,
+                optimizationRules: winLossRules.filter(r => r.active)
+            } : null,
             utmParams,
             projections: totalProjections,
             connectedAccounts
@@ -420,8 +468,8 @@ export default function CampaignSetupPage() {
                                                     key={platform.id}
                                                     onClick={() => handlePlatformToggle(platform.id)}
                                                     className={`rounded-xl p-4 border-2 cursor-pointer transition-all ${selectedPlatforms.includes(platform.id)
-                                                            ? 'bg-white/10'
-                                                            : 'border-white/10 hover:border-white/30 bg-black/20'
+                                                        ? 'bg-white/10'
+                                                        : 'border-white/10 hover:border-white/30 bg-black/20'
                                                         }`}
                                                     style={selectedPlatforms.includes(platform.id) ? { borderColor: platform.color } : {}}
                                                 >
@@ -595,8 +643,8 @@ export default function CampaignSetupPage() {
                                                     key={strategy.id}
                                                     onClick={() => setBiddingStrategy(strategy.id as BiddingStrategy)}
                                                     className={`rounded-xl p-4 border-2 cursor-pointer transition-all ${biddingStrategy === strategy.id
-                                                            ? 'border-purple-500 bg-purple-500/10'
-                                                            : 'border-white/10 hover:border-white/30'
+                                                        ? 'border-purple-500 bg-purple-500/10'
+                                                        : 'border-white/10 hover:border-white/30'
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-3">
@@ -743,9 +791,326 @@ export default function CampaignSetupPage() {
                                 )}
                             </AnimatePresence>
                         </div>
+
+                        {/* ==================== PRO MODE SETTINGS ==================== */}
+                        <div className={`rounded-2xl border overflow-hidden transition-all ${isProMode ? 'bg-white/5 border-purple-500/50' : 'bg-transparent border-transparent'}`}>
+                            <button
+                                onClick={() => setIsProMode(!isProMode)}
+                                className="w-full p-5 flex items-center justify-between hover:bg-white/5 rounded-2xl border border-white/10"
+                            >
+                                <h3 className="font-bold flex items-center gap-2">
+                                    <Zap size={18} className={isProMode ? 'text-yellow-400' : 'text-white/40'} />
+                                    {isProMode ? 'Pro Mode: ĐANG BẬT' : 'Bật chế độ chuyên gia (Pro Mode)'}
+                                </h3>
+                                <div className={`w-12 h-6 rounded-full p-1 transition-colors ${isProMode ? 'bg-purple-600' : 'bg-white/10'}`}>
+                                    <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${isProMode ? 'translate-x-6' : ''}`} />
+                                </div>
+                            </button>
+
+                            <AnimatePresence>
+                                {isProMode && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="p-5 pt-0 space-y-6 border-t border-white/10 mt-4">
+
+                                            {/* Keywords */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                                                        <Target size={14} className="text-blue-400" /> Từ khóa mục tiêu (Google/TikTok)
+                                                    </label>
+                                                    <textarea
+                                                        value={keywords}
+                                                        onChange={(e) => setKeywords(e.target.value)}
+                                                        placeholder="Nhập từ khóa, phân cách bằng dấu phẩy..."
+                                                        className="w-full h-24 bg-black/30 border border-white/10 rounded-xl p-3 text-sm focus:border-purple-500 outline-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                                                        <Shield size={14} className="text-red-400" /> Từ khóa phủ định (Exclusions)
+                                                    </label>
+                                                    <textarea
+                                                        value={negativeKeywords}
+                                                        onChange={(e) => setNegativeKeywords(e.target.value)}
+                                                        placeholder="Nhập từ khóa muốn loại trừ..."
+                                                        className="w-full h-24 bg-black/30 border border-white/10 rounded-xl p-3 text-sm focus:border-red-500 outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Bid Cap */}
+                                            <div className="bg-black/30 rounded-xl p-4">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className="text-sm font-medium">Giới hạn giá thầu (Bid Cap)</label>
+                                                    <span className="text-xs text-white/50">Để 0 nếu muốn Auto</span>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <DollarSign size={16} className="text-green-400" />
+                                                    <input
+                                                        type="number"
+                                                        value={bidCap}
+                                                        onChange={(e) => setBidCap(Number(e.target.value))}
+                                                        className="bg-transparent border-b border-white/20 py-1 w-32 focus:border-green-500 outline-none font-bold"
+                                                    />
+                                                    <span className="text-sm text-white/50">VND</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Win/Loss Rules */}
+                                            <div>
+                                                <h4 className="font-bold flex items-center gap-2 mb-3">
+                                                    <TrendingUp size={16} className="text-cyan-400" /> Quy tắc Win/Loss (Automation)
+                                                </h4>
+                                                <div className="space-y-3">
+                                                    {winLossRules.map((rule, idx) => (
+                                                        <div key={rule.id} className="bg-white/5 p-3 rounded-xl flex items-center justify-between border border-white/5 hover:border-white/20 transition-colors">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${rule.active ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/5 text-white/30'}`}>
+                                                                    <Settings size={14} />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-medium text-sm">{rule.name}</p>
+                                                                    <p className="text-xs text-white/50">
+                                                                        Nếu {rule.metric} {rule.operator} {rule.threshold} ➔ {rule.action}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const newRules = [...winLossRules];
+                                                                        newRules[idx].active = !newRules[idx].active;
+                                                                        setWinLossRules(newRules);
+                                                                    }}
+                                                                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${rule.active ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white/40'}`}
+                                                                >
+                                                                    {rule.active ? 'ON' : 'OFF'}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    <button className="w-full py-2 border border-dashed border-white/20 rounded-xl text-xs text-white/40 hover:text-white hover:border-white/40 transition-colors">
+                                                        + Thêm quy tắc mới
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* ==================== KEYWORD INTELLIGENCE ==================== */}
+                                            <div className="pt-6 border-t border-white/10">
+                                                <h4 className="font-bold flex items-center gap-2 mb-3">
+                                                    <Target size={16} className="text-blue-400" /> Keyword Intelligence
+                                                </h4>
+                                                <p className="text-xs text-white/50 mb-3">AI đề xuất từ khóa dựa trên Brand DNA và ngành hàng</p>
+                                                <div className="bg-black/30 rounded-xl overflow-hidden">
+                                                    <div className="grid grid-cols-5 gap-2 p-3 border-b border-white/10 text-xs font-medium text-white/60">
+                                                        <span className="col-span-2">Từ khóa</span>
+                                                        <span className="text-center">Volume</span>
+                                                        <span className="text-center">CPC</span>
+                                                        <span className="text-center">Cạnh tranh</span>
+                                                    </div>
+                                                    {suggestedKeywords.map((kw, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            onClick={() => {
+                                                                const newKws = [...suggestedKeywords];
+                                                                newKws[idx].selected = !newKws[idx].selected;
+                                                                setSuggestedKeywords(newKws);
+                                                            }}
+                                                            className={`grid grid-cols-5 gap-2 p-3 items-center text-sm cursor-pointer transition-colors ${kw.selected ? 'bg-blue-500/10' : 'hover:bg-white/5'}`}
+                                                        >
+                                                            <div className="col-span-2 flex items-center gap-2">
+                                                                <div className={`w-4 h-4 rounded border ${kw.selected ? 'bg-blue-500 border-blue-500' : 'border-white/30'} flex items-center justify-center`}>
+                                                                    {kw.selected && <Check size={10} className="text-white" />}
+                                                                </div>
+                                                                <span className={kw.selected ? 'text-white' : 'text-white/60'}>{kw.keyword}</span>
+                                                            </div>
+                                                            <span className="text-center text-white/80">{(kw.volume / 1000).toFixed(1)}K</span>
+                                                            <span className="text-center text-green-400">{formatCurrency(kw.cpc)}</span>
+                                                            <span className={`text-center text-xs px-2 py-1 rounded-full ${kw.competition === 'Low' ? 'bg-green-500/20 text-green-400' : kw.competition === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                {kw.competition}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <p className="text-xs text-white/40 mt-2">
+                                                    ✓ {suggestedKeywords.filter(k => k.selected).length} từ khóa đã chọn
+                                                </p>
+                                            </div>
+
+                                            {/* ==================== ADVANCED PLACEMENTS ==================== */}
+                                            <div className="pt-6 border-t border-white/10">
+                                                <h4 className="font-bold flex items-center gap-2 mb-3">
+                                                    <Layers size={16} className="text-purple-400" /> Advanced Placements
+                                                </h4>
+
+                                                {/* Devices */}
+                                                <div className="mb-4">
+                                                    <p className="text-xs text-white/50 mb-2">Thiết bị hiển thị</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {Object.entries(placements.devices).map(([device, enabled]) => (
+                                                            <button
+                                                                key={device}
+                                                                onClick={() => setPlacements(prev => ({ ...prev, devices: { ...prev.devices, [device]: !enabled } }))}
+                                                                className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 transition-colors ${enabled ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' : 'bg-white/5 text-white/40 border border-white/10'}`}
+                                                            >
+                                                                {enabled && <Check size={12} />}
+                                                                {device === 'mobile' ? '📱 Mobile' : device === 'desktop' ? '🖥️ Desktop' : '📟 Tablet'}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Facebook Placements */}
+                                                {selectedPlatforms.includes('facebook') && (
+                                                    <div className="mb-4">
+                                                        <p className="text-xs text-white/50 mb-2">Facebook Placements</p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {Object.entries(placements.facebook).map(([placement, enabled]) => (
+                                                                <button
+                                                                    key={placement}
+                                                                    onClick={() => setPlacements(prev => ({ ...prev, facebook: { ...prev.facebook, [placement]: !enabled } }))}
+                                                                    className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 transition-colors ${enabled ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' : 'bg-white/5 text-white/40 border border-white/10'}`}
+                                                                >
+                                                                    {enabled && <Check size={12} />}
+                                                                    {placement === 'feed' ? 'Feed' : placement === 'stories' ? 'Stories' : placement === 'reels' ? 'Reels' : placement === 'messenger' ? 'Messenger' : 'Audience Network'}
+                                                                    {placement === 'audienceNetwork' && <span className="text-xs text-red-400 ml-1">(bot risk)</span>}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Schedule */}
+                                                <div>
+                                                    <p className="text-xs text-white/50 mb-2">Lịch chạy quảng cáo</p>
+                                                    <div className="flex items-center gap-4">
+                                                        <button
+                                                            onClick={() => setPlacements(prev => ({ ...prev, schedule: { ...prev.schedule, allDay: true } }))}
+                                                            className={`px-3 py-1 rounded-full text-sm ${placements.schedule.allDay ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-white/40'}`}
+                                                        >
+                                                            🕐 Cả ngày
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setPlacements(prev => ({ ...prev, schedule: { ...prev.schedule, allDay: false } }))}
+                                                            className={`px-3 py-1 rounded-full text-sm ${!placements.schedule.allDay ? 'bg-orange-500/20 text-orange-400' : 'bg-white/5 text-white/40'}`}
+                                                        >
+                                                            ⏰ Tùy chỉnh
+                                                        </button>
+                                                        {!placements.schedule.allDay && (
+                                                            <div className="flex items-center gap-2 text-sm">
+                                                                <input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    max={23}
+                                                                    value={placements.schedule.startHour}
+                                                                    onChange={(e) => setPlacements(prev => ({ ...prev, schedule: { ...prev.schedule, startHour: Number(e.target.value) } }))}
+                                                                    className="w-14 bg-black/30 border border-white/10 rounded px-2 py-1 text-center"
+                                                                />
+                                                                <span>-</span>
+                                                                <input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    max={23}
+                                                                    value={placements.schedule.endHour}
+                                                                    onChange={(e) => setPlacements(prev => ({ ...prev, schedule: { ...prev.schedule, endHour: Number(e.target.value) } }))}
+                                                                    className="w-14 bg-black/30 border border-white/10 rounded px-2 py-1 text-center"
+                                                                />
+                                                                <span className="text-white/40">giờ</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    {!placements.schedule.allDay && (
+                                                        <p className="text-xs text-cyan-400 mt-2">💡 AI Insight: Peak hours cho ngành của bạn: 19h-21h</p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* ==================== A/B TESTING ==================== */}
+                                            <div className="pt-6 border-t border-white/10">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <h4 className="font-bold flex items-center gap-2">
+                                                        <BarChart3 size={16} className="text-green-400" /> A/B Testing
+                                                    </h4>
+                                                    <button
+                                                        onClick={() => setAbTestEnabled(!abTestEnabled)}
+                                                        className={`w-12 h-6 rounded-full p-1 transition-colors ${abTestEnabled ? 'bg-green-600' : 'bg-white/10'}`}
+                                                    >
+                                                        <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${abTestEnabled ? 'translate-x-6' : ''}`} />
+                                                    </button>
+                                                </div>
+
+                                                {abTestEnabled && (
+                                                    <div className="space-y-4">
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            {abVariants.map((variant, idx) => (
+                                                                <div key={variant.id} className={`bg-black/30 rounded-xl p-4 border ${variant.isControl ? 'border-blue-500/30' : 'border-orange-500/30'}`}>
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <span className={`text-sm font-bold ${variant.isControl ? 'text-blue-400' : 'text-orange-400'}`}>
+                                                                            Variant {variant.id} {variant.isControl && '(Control)'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={variant.headline}
+                                                                        onChange={(e) => {
+                                                                            const newVariants = [...abVariants];
+                                                                            newVariants[idx].headline = e.target.value;
+                                                                            setAbVariants(newVariants);
+                                                                        }}
+                                                                        placeholder={variant.isControl ? 'Headline gốc...' : 'Headline thử nghiệm...'}
+                                                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-green-500 outline-none"
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="grid grid-cols-3 gap-4">
+                                                            <div>
+                                                                <label className="text-xs text-white/50 block mb-1">Budget Test</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={abBudget}
+                                                                    onChange={(e) => setAbBudget(Number(e.target.value))}
+                                                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-xs text-white/50 block mb-1">Thời gian (ngày)</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={abDuration}
+                                                                    onChange={(e) => setAbDuration(Number(e.target.value))}
+                                                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-xs text-white/50 block mb-1">Metric Winner</label>
+                                                                <select
+                                                                    value={abWinnerMetric}
+                                                                    onChange={(e) => setAbWinnerMetric(e.target.value as any)}
+                                                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm"
+                                                                >
+                                                                    <option value="CTR">CTR cao nhất</option>
+                                                                    <option value="CPA">CPA thấp nhất</option>
+                                                                    <option value="ROAS">ROAS cao nhất</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
                     </div>
 
-                    {/* Right Column - Account Connection & Summary */}
                     <div className="space-y-6">
                         {/* Account Connection */}
                         <div className="bg-gradient-to-br from-purple-500/10 to-cyan-500/10 rounded-2xl border border-purple-500/20 p-6">
@@ -835,10 +1200,10 @@ export default function CampaignSetupPage() {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div >
 
                 {/* Bottom Action */}
-                <div className="mt-8 flex justify-between">
+                < div className="mt-8 flex justify-between" >
                     <button onClick={() => window.location.href = '/app/creative'} className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl flex items-center gap-2">
                         <ArrowLeft size={18} /> Quay lại Nội dung
                     </button>
@@ -850,8 +1215,8 @@ export default function CampaignSetupPage() {
                     >
                         <Rocket size={18} /> Tiếp: Chạy Chiến dịch <ChevronRight size={18} />
                     </button>
-                </div>
-            </div>
-        </main>
+                </div >
+            </div >
+        </main >
     );
 }

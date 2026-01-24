@@ -9,6 +9,26 @@ import {
 } from 'lucide-react';
 import ProNav from '@/components/ProNav';
 
+const Typer = ({ text, speed = 20 }: { text: string; speed?: number }) => {
+    const [displayed, setDisplayed] = useState('');
+
+    useEffect(() => {
+        setDisplayed('');
+        let i = 0;
+        const timer = setInterval(() => {
+            if (i < text.length) {
+                setDisplayed(prev => prev + text.charAt(i));
+                i++;
+            } else {
+                clearInterval(timer);
+            }
+        }, speed);
+        return () => clearInterval(timer);
+    }, [text, speed]);
+
+    return <span>{displayed}<span className="animate-pulse text-cyan-400">|</span></span>;
+};
+
 // Platform types - Removed Instagram
 type Platform = 'tiktok' | 'youtube_shorts' | 'youtube_preroll' | 'facebook_reels' | 'facebook_feed';
 type ImagePlatform = 'facebook' | 'youtube' | 'google_display';
@@ -506,7 +526,7 @@ export default function CreativeStudioPage() {
                                                                     <span className="text-xs px-2 py-1 rounded-full bg-white/10">{scene.timeRange}</span>
                                                                     <span className="text-sm font-medium capitalize">{scene.type}</span>
                                                                 </div>
-                                                                <p className="text-cyan-400 mb-1">🎤 "{scene.voiceover}"</p>
+                                                                <p className="text-cyan-400 mb-1">🎤 "<Typer text={scene.voiceover} speed={15} />"</p>
                                                                 <p className="text-yellow-400 text-sm">📝 {scene.textOverlay}</p>
                                                             </div>
                                                         ))}

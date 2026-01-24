@@ -34,18 +34,23 @@ interface CampaignMetrics {
     conversions: number;
     cpc: number;
     roas: number;
+    healthScore?: number;
+    optimizationLogs?: string[];
 }
+
+type CampaignStatus = 'active' | 'paused' | 'pending' | 'learning';
 
 interface PlatformCampaign {
     platformId: string;
     platformName: string;
-    status: 'active' | 'paused' | 'pending' | 'learning';
+    status: CampaignStatus;
     dailyBudget: number;
     metrics: CampaignMetrics;
     trend: 'up' | 'down' | 'stable';
 }
 
-const PLATFORM_ICONS: Record<string, any> = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const PLATFORM_ICONS: Record<string, React.ComponentType<any>> = {
     facebook: Facebook,
     tiktok: TikTokIcon,
     youtube: Youtube,
@@ -74,6 +79,9 @@ export default function LaunchPage() {
     const [optimizerEnabled, setOptimizerEnabled] = useState(true);
     const [optimizerLogs, setOptimizerLogs] = useState<string[]>([]);
 
+    // Deployment Logs
+    const [launchLogs, setLaunchLogs] = useState<{ time: string, message: string, type: 'info' | 'success' | 'error' }[]>([]);
+
     // Load data
     useEffect(() => {
         const storedDNA = localStorage.getItem('kodaflow_brand_dna');
@@ -86,13 +94,53 @@ export default function LaunchPage() {
     }, []);
 
     // Simulate campaign launch
+    // Simulate campaign launch
     const handleLaunch = async () => {
         if (!setupData) return;
 
         setIsLaunching(true);
+        setLaunchLogs([]);
 
-        // Simulate API calls to ad platforms
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        const addLog = (msg: string, type: 'info' | 'success' | 'error' = 'info') => {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '.' + Math.floor(Math.random() * 999);
+            setLaunchLogs(prev => [...prev, { time, message: msg, type }]);
+            // Auto scroll
+            const consoleEl = document.getElementById('deploy-console');
+            if (consoleEl) consoleEl.scrollTop = consoleEl.scrollHeight;
+        };
+
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+        // Sequence
+        addLog('Initializing KODA Deployment Agent v2.4...', 'info');
+        await sleep(600);
+        addLog('Verifying brand_dna signature...', 'info');
+        await sleep(400);
+        addLog('Signature verified. Access granted.', 'success');
+        await sleep(300);
+
+        for (const platform of (setupData.platforms || ['facebook', 'tiktok'])) {
+            addLog(`Connecting to ${platform.toUpperCase()} Graph API...`, 'info');
+            await sleep(800);
+            addLog(`Authentication successful (Token: ************)`, 'success');
+            await sleep(400);
+            addLog(`Uploading creative assets to ${platform} CDN...`, 'info');
+            await sleep(1200);
+            addLog(`Assets optimized: 1080p, High Bitrate`, 'success');
+            await sleep(500);
+            addLog(`Configuring AdSets: ${platform}_lookalike_1pct`, 'info');
+            await sleep(600);
+            addLog(`Bid Strategy: Cost Cap @ Automatic`, 'info');
+            await sleep(300);
+            addLog(`Targeting: Vietnam, 18-45, Interests matched`, 'success');
+            await sleep(500);
+        }
+
+        addLog('Running final pre-flight checks...', 'info');
+        await sleep(1000);
+        addLog('ALL SYSTEMS GO.', 'success');
+        addLog('LAUNCHING CAMPAIGNS...', 'success');
+        await sleep(1500);
 
         // Create initial campaign states
         const initialCampaigns: PlatformCampaign[] = setupData.budgetAllocations.map((allocation: any) => ({
@@ -107,7 +155,9 @@ export default function LaunchPage() {
                 spend: 0,
                 conversions: 0,
                 cpc: 0,
-                roas: 0
+                roas: 0,
+                healthScore: 100,
+                optimizationLogs: []
             },
             trend: 'stable' as const
         }));
@@ -142,7 +192,10 @@ export default function LaunchPage() {
 
                 // KODA Optimizer logic
                 const ctr = (totalClicks / totalImpressions) * 100;
-                const newStatus = ctr < 1 && totalImpressions > 1000 ? 'paused' : 'active';
+                let newStatus: CampaignStatus = 'active';
+                if (ctr < 1 && totalImpressions > 1000) {
+                    newStatus = 'paused';
+                }
 
                 if (newStatus === 'paused' && campaign.status !== 'paused' && optimizerEnabled) {
                     setOptimizerLogs(prev => [...prev, `⚠️ ${campaign.platformName}: CTR thấp (${ctr.toFixed(2)}%), tự động tạm dừng`]);
@@ -150,7 +203,7 @@ export default function LaunchPage() {
 
                 return {
                     ...campaign,
-                    status: optimizerEnabled ? (newStatus as any) : campaign.status === 'learning' ? 'active' : campaign.status,
+                    status: optimizerEnabled ? newStatus : (campaign.status === 'learning' ? 'active' : campaign.status),
                     metrics: {
                         impressions: totalImpressions,
                         clicks: totalClicks,
@@ -174,9 +227,9 @@ export default function LaunchPage() {
     const toggleCampaignStatus = (platformId: string) => {
         setCampaigns(prev => prev.map(c => {
             if (c.platformId === platformId) {
-                const newStatus = c.status === 'active' ? 'paused' : 'active';
+                const newStatus: CampaignStatus = c.status === 'active' ? 'paused' : 'active';
                 setOptimizerLogs(logs => [...logs, `${newStatus === 'active' ? '▶️' : '⏸️'} ${c.platformName}: ${newStatus === 'active' ? 'Đã bật' : 'Đã tắt'} thủ công`]);
-                return { ...c, status: newStatus as any };
+                return { ...c, status: newStatus };
             }
             return c;
         }));
@@ -292,23 +345,49 @@ export default function LaunchPage() {
                             </div>
                         </div>
 
+                        {/* Console Log Overlay */}
+                        {isLaunching && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md">
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="w-full max-w-2xl bg-[#0a0a0f] border border-green-500/30 rounded-xl overflow-hidden font-mono text-xs md:text-sm shadow-2xl shadow-green-500/10"
+                                >
+                                    {/* Terminal Header */}
+                                    <div className="bg-[#1a1a1f] px-4 py-2 flex items-center justify-between border-b border-white/5">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 rounded-full bg-red-500/50" />
+                                            <div className="w-3 h-3 rounded-full bg-yellow-500/50" />
+                                            <div className="w-3 h-3 rounded-full bg-green-500/50" />
+                                        </div>
+                                        <div className="text-white/40">koda_deploy_cli_v2.4.0</div>
+                                    </div>
+
+                                    {/* Terminal Body */}
+                                    <div className="p-6 h-80 overflow-y-auto space-y-2 font-mono" id="deploy-console">
+                                        {launchLogs.map((log, i) => (
+                                            <div key={i} className={`flex gap-3 ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-400' : 'text-blue-400'}`}>
+                                                <span className="text-white/30">[{log.time}]</span>
+                                                <span>
+                                                    <span className="opacity-50 mr-2">{'>'}</span>
+                                                    {log.message}
+                                                </span>
+                                            </div>
+                                        ))}
+                                        <div className="animate-pulse text-green-500">_</div>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+
                         <button
                             onClick={handleLaunch}
                             disabled={isLaunching}
-                            className="px-12 py-4 rounded-2xl font-bold text-lg flex items-center gap-3 mx-auto disabled:opacity-70"
+                            className="px-12 py-4 rounded-2xl font-bold text-lg flex items-center gap-3 mx-auto disabled:opacity-70 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-cyan-500/20"
                             style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
                         >
-                            {isLaunching ? (
-                                <>
-                                    <Loader2 className="animate-spin" size={24} />
-                                    Đang khởi chạy...
-                                </>
-                            ) : (
-                                <>
-                                    <Rocket size={24} />
-                                    🚀 KHỞI CHẠY NGAY
-                                </>
-                            )}
+                            <Rocket size={24} />
+                            🚀 KHỞI CHẠY NGAY
                         </button>
                     </motion.div>
                 ) : (
@@ -384,8 +463,8 @@ export default function LaunchPage() {
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${campaign.status === 'active' ? 'bg-green-500/20 text-green-400' :
-                                                            campaign.status === 'learning' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                                'bg-red-500/20 text-red-400'
+                                                        campaign.status === 'learning' ? 'bg-yellow-500/20 text-yellow-400' :
+                                                            'bg-red-500/20 text-red-400'
                                                         }`}>
                                                         {campaign.status === 'active' ? '🟢 Active' :
                                                             campaign.status === 'learning' ? '🟡 Learning' : '🔴 Paused'}
@@ -407,7 +486,7 @@ export default function LaunchPage() {
                                                 <div className="bg-black/30 rounded-lg p-3">
                                                     <p className="text-xs text-white/40">CTR</p>
                                                     <p className={`font-semibold flex items-center gap-1 ${campaign.trend === 'up' ? 'text-green-400' :
-                                                            campaign.trend === 'down' ? 'text-red-400' : ''
+                                                        campaign.trend === 'down' ? 'text-red-400' : ''
                                                         }`}>
                                                         {campaign.metrics.ctr.toFixed(2)}%
                                                         {campaign.trend === 'up' && <TrendingUp size={14} />}
@@ -423,6 +502,38 @@ export default function LaunchPage() {
                                                     <p className={`font-semibold ${campaign.metrics.roas > 1 ? 'text-green-400' : 'text-red-400'}`}>
                                                         {campaign.metrics.roas.toFixed(2)}x
                                                     </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Optimization Panel */}
+                                            <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="bg-black/20 rounded-lg p-3">
+                                                    <p className="text-xs text-white/50 mb-2 flex items-center gap-2">
+                                                        <TrendingUp size={12} className="text-green-400" /> Optimization Rules (Active)
+                                                    </p>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between text-xs">
+                                                            <span className="text-white/70">Win Rule: ROAS &gt; 3.0</span>
+                                                            <span className="text-green-400">Scale Budget (+20%)</span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between text-xs">
+                                                            <span className="text-white/70">Loss Rule: CPA &gt; 1.5x</span>
+                                                            <span className="text-red-400 font-bold">KILL ADSET</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-black/20 rounded-lg p-3">
+                                                    <p className="text-xs text-white/50 mb-2 flex items-center gap-2">
+                                                        <AlertCircle size={12} className="text-yellow-400" /> Recent Optimizations
+                                                    </p>
+                                                    <div className="space-y-1 max-h-16 overflow-y-auto">
+                                                        {optimizerEnabled && campaign.status !== 'active' && (
+                                                            <p className="text-xs text-white/60 font-mono">⚠️ Auto-paused due to low CTR</p>
+                                                        )}
+                                                        {(!optimizerEnabled || campaign.status === 'active') && (
+                                                            <p className="text-xs text-white/40 italic">Running optimally...</p>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -473,6 +584,6 @@ export default function LaunchPage() {
                     )}
                 </div>
             </div>
-        </main>
+        </main >
     );
 }

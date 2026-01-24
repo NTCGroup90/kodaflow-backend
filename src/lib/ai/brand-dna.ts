@@ -306,9 +306,10 @@ OUTPUT JSON FORMAT (Bắt buộc - Chỉ JSON, không markdown):
                 console.log('[DNA] Gemini response length:', response.length);
                 console.log('[DNA] Response preview:', response.substring(0, 500));
                 break; // Success, exit retry loop
-            } catch (retryError: any) {
+            } catch (retryError: unknown) {
                 lastError = retryError;
-                console.error(`[DNA] Attempt ${attempt} failed:`, retryError.message || retryError);
+                const errorMessage = retryError instanceof Error ? retryError.message : String(retryError);
+                console.error(`[DNA] Attempt ${attempt} failed:`, errorMessage);
                 if (attempt < 3) {
                     console.log('[DNA] Retrying in 2 seconds...');
                     await new Promise(r => setTimeout(r, 2000));
@@ -323,7 +324,7 @@ OUTPUT JSON FORMAT (Bắt buộc - Chỉ JSON, không markdown):
         console.log('[DNA] Gemini response received successfully');
 
         // Parse JSON
-        let cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             console.error('[DNA] No JSON found in response. Full response:', response);
@@ -350,10 +351,12 @@ OUTPUT JSON FORMAT (Bắt buộc - Chỉ JSON, không markdown):
             industryCategory: parsed.industryCategory || 'General',
         };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[DNA] ==== AI ANALYSIS FAILED ====');
-        console.error('[DNA] Error type:', error.name);
-        console.error('[DNA] Error message:', error.message);
+        if (error instanceof Error) {
+            console.error('[DNA] Error type:', error.name);
+            console.error('[DNA] Error message:', error.message);
+        }
         console.error('[DNA] Full error:', error);
 
         // Return fallback but log prominently
@@ -459,7 +462,7 @@ OUTPUT JSON (Chỉ JSON, không markdown):
     try {
         const response = await callGemini(prompt, { temperature: 0.8, maxTokens: 4096 });
 
-        let cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
         if (!jsonMatch) throw new Error('No JSON found');
 
