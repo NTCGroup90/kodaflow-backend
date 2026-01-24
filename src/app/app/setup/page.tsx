@@ -266,6 +266,21 @@ export default function CampaignSetupPage() {
             updateBudgetAllocations(['facebook', 'tiktok'], 500000, smartAlloc);
         }
 
+        // Fetch real connection status from API
+        fetch('/api/ads/status')
+            .then(res => res.json())
+            .then(data => {
+                setConnectedAccounts({
+                    facebook: data.facebook?.connected || false,
+                    tiktok: data.tiktok?.connected || false,
+                    google: data.google?.connected || false,
+                    youtube: data.youtube?.connected || false
+                });
+            })
+            .catch(() => {
+                // Ignore errors, keep default false state
+            });
+
         setIsLoading(false);
     }, [updateBudgetAllocations]);
 
