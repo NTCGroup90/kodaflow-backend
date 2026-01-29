@@ -122,50 +122,64 @@ export async function generateViralScripts(
 - Điểm yếu đối thủ: ${brandDNA.competitorWeaknesses?.join(', ') || 'Không có'}
 
 ## PLATFORM: ${platform.toUpperCase()}
-- Thời lượng: ${spec.duration}
+- Thời lượng tổng: ${spec.duration}
 - Tỉ lệ: ${spec.aspectRatio}
 - Style: ${spec.style}
-- Thời gian hook: ${spec.hookTime} giây đầu QUYẾT ĐỊNH tất cả!
-${spec.skipButton ? '- ⚠️ CÓ NÚT SKIP SAU 5 GIÂY - PHẢI HOOK TRƯỚC 5S!' : ''}
 
-## LOẠI HOOK HIỆU QUẢ:
-${HOOK_TYPES.map(h => `- ${h.type}: ${h.desc} (VD: ${h.example})`).join('\n')}
+## QUY TẮC CẤU TRÚC VIDEO (QUAN TRỌNG NHẤT):
+Video AI (Kling, Veo, Runway) cần prompt có độ dài chuẩn.
+**BẠN BẮT BUỘC PHẢI CHIA KỊCH BẢN THÀNH CÁC PHÂN CẢNH (SCENES) CÓ ĐỘ DÀI CỐ ĐỊNH LÀ 5 GIÂY HOẶC 8 GIÂY.**
 
-## YÊU CẦU KỊCH BẢN:
-1. **HOOK (0-${spec.hookTime}s)**: PHẢI LÀ 1 TRONG CÁC LOẠI HOOK TRÊN. Gây SỐC, TÒ MÒ, hoặc PATTERN INTERRUPT. Đây là 80% thành công!
-2. **PROBLEM/AGITATE**: Khuếch đại pain point - làm viewer CẢM NHẬN được vấn đề
-3. **SOLUTION**: Introduce sản phẩm như GIẢI PHÁP duy nhất
-4. **PROOF** (nếu có time): Social proof, số liệu, testimonial
-5. **CTA**: URGENCY + SCARCITY. "Chỉ hôm nay", "Số lượng có hạn"...
+KHÔNG ĐƯỢC chia nhỏ lẻ như 2s, 3s, 4s.
+Tổng thời lượng video được ghép từ các block 5s hoặc 8s này.
+
+Ví dụ cách chia (Strategy):
+- Option 1 (Nhanh): Các scence đều 5s. (Ví dụ 15s = 5s + 5s + 5s)
+- Option 2 (Chuẩn): Các scene đều 8s. (Ví dụ 16s = 8s + 8s)
+- Option 3 (Mix): Kết hợp 8s và 5s. (Ví dụ 13s = 8s + 5s)
+
+## QUY TẮC NGÔN NGỮ:
+1. **VISUAL PROMPT**: PHẢI viết bằng **TIẾNG ANH (ENGLISH)**. Mô tả chi tiết chuyển động, ánh sáng, góc máy cho AI.
+2. **VOICEOVER & TEXT**: PHẢI viết bằng **TIẾNG VIỆT**.
+
+## YÊU CẦU NỘI DUNG (Lồng ghép vào các scene 5s/8s ở trên):
+1. **Framework**: Đi từ Hook -> Problem -> Solution -> CTA.
+2. Bạn phải tóm gọn nội dung của từng phần này sao cho khớp với block thời gian 5s/8s.
+   - Ví dụ: Hook nằm trọn trong Scene 1 (0-5s).
+   - Problem nằm trong Scene 2 (5-10s).
 
 ## FORMAT JSON:
 {
   "hookType": "loại hook sử dụng",
-  "estimatedCTR": "ước tính CTR dựa trên hook strength (Low/Medium/High)",
+  "estimatedCTR": "Hight/Medium",
   "scenes": [
     {
-      "timeRange": "0-2s",
+      "timeRange": "0-5s",
       "type": "hook",
-      "duration": 2,
-      "visual": "Mô tả CHI TIẾT hình ảnh - phải liên quan đến brand",
-      "voiceover": "Câu nói GÂY SỐC/TÒ MÒ - dùng đúng tone của brand",
-      "textOverlay": "Text ngắn gọn, CẦN ĐỌC ĐƯỢC TRONG 1-2 GIÂY",
-      "emotionalTrigger": "Cảm xúc muốn kích hoạt: curiosity/fear/desire/frustration",
-      "transition": "cut/zoom/swipe"
+      "duration": 5,
+      "visual": "ENGLISH PROMPT for AI Video Generator. Cinematic, lighting, movement description.",
+      "voiceover": "Lời thoại tiếng việt khớp với 5s này.",
+      "textOverlay": "Text tiếng việt",
+      "emotionalTrigger": "curiosity",
+      "transition": "cut"
+    },
+    {
+      "timeRange": "5-13s",
+      "type": "problem",
+      "duration": 8,
+      "visual": "ENGLISH PROMPT for next scene...",
+      "voiceover": "...",
+      "textOverlay": "..."
     }
   ],
-  "aiVideoPrompt": "Prompt CHI TIẾT để tạo video bằng Veo 3/Kling - phải bao gồm brand elements, màu ${brandDNA.brandColors.join(', ')}, style ${brandDNA.toneOfVoice.join(', ')}",
-  "suggestedMusic": "Gợi ý nhạc phù hợp với brand tone",
-  "captionText": "Caption đầy đủ với emoji, hashtags",
-  "hashtagSuggestions": ["hashtag1", "hashtag2"],
-  "conversionTips": ["Tip tăng conversion 1", "Tip 2", "Tip 3"]
+  "aiVideoPrompt": "ENGLISH. General style description.",
+  "suggestedMusic": "...",
+  "captionText": "...",
+  "hashtagSuggestions": ["..."],
+  "conversionTips": ["..."]
 }
 
-QUAN TRỌNG:
-- PHẢI sử dụng thông tin DNA trong mọi scene
-- Hook PHẢI liên quan trực tiếp đến pain point của target audience
-- Giọng điệu PHẢI đúng với brand tone
-- Visual PHẢI có màu sắc brand: ${brandDNA.brandColors.join(', ')}`;
+HÃY TẠO RA 1 KỊCH BẢN HOÀN CHỈNH, TUÂN THỦ NGHIÊM NGẶT ĐỘ DÀI SCENE (5s HOẶC 8s).`;
 
         try {
             const result = await model.generateContent(prompt);

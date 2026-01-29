@@ -29,6 +29,30 @@ const Typer = ({ text, speed = 20 }: { text: string; speed?: number }) => {
     return <span>{displayed}<span className="animate-pulse text-cyan-400">|</span></span>;
 };
 
+const CopyBtn = ({ text, className = '' }: { text: string; className?: string }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy!', err);
+        }
+    };
+
+    return (
+        <button
+            onClick={handleCopy}
+            className={`px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-sm flex items-center gap-1 transition-colors ${className}`}
+        >
+            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+            {copied ? 'Copied!' : 'Copy'}
+        </button>
+    );
+};
+
 // Platform types - Removed Instagram
 type Platform = 'tiktok' | 'youtube_shorts' | 'youtube_preroll' | 'facebook_reels' | 'facebook_feed';
 type ImagePlatform = 'facebook' | 'youtube' | 'google_display';
@@ -355,9 +379,7 @@ export default function CreativeStudioPage() {
         img.src = URL.createObjectURL(file);
     };
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-    };
+
 
     const primaryColor = brandDNA?.brandColors?.[0] || '#00d4ff';
     const secondaryColor = brandDNA?.brandColors?.[1] || '#a855f7';
@@ -527,14 +549,23 @@ export default function CreativeStudioPage() {
                                                                     <span className="text-sm font-medium capitalize">{scene.type}</span>
                                                                 </div>
                                                                 <p className="text-cyan-400 mb-1">🎤 "<Typer text={scene.voiceover} speed={15} />"</p>
-                                                                <p className="text-yellow-400 text-sm">📝 {scene.textOverlay}</p>
+                                                                <p className="text-yellow-400 text-sm mb-3">📝 {scene.textOverlay}</p>
+
+                                                                {/* Video Prompt Display */}
+                                                                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                                                                    <div className="flex justify-between items-start gap-2 mb-1">
+                                                                        <span className="text-xs font-bold text-white/50 uppercase tracking-wider">🎥 AI Video Prompt ({scene.duration}s)</span>
+                                                                        <CopyBtn text={scene.visual} />
+                                                                    </div>
+                                                                    <p className="text-white/60 text-xs italic font-mono">{scene.visual}</p>
+                                                                </div>
                                                             </div>
                                                         ))}
 
                                                         <div className="bg-gradient-to-r from-purple-500/10 to-cyan-500/10 rounded-xl p-4">
                                                             <div className="flex items-center justify-between mb-2">
-                                                                <strong>🤖 Prompt cho AI Video</strong>
-                                                                <button onClick={() => copyToClipboard(script.aiVideoPrompt)} className="px-3 py-1 bg-white/10 rounded text-sm">Copy</button>
+                                                                <strong>🤖 Prompt cho AI Video (Full)</strong>
+                                                                <CopyBtn text={script.aiVideoPrompt} />
                                                             </div>
                                                             <p className="text-white/70 text-sm">{script.aiVideoPrompt}</p>
                                                         </div>
@@ -603,9 +634,9 @@ export default function CreativeStudioPage() {
                                                     rows={5}
                                                     className="w-full bg-black/30 rounded-lg p-3 text-sm text-white/80 border border-white/10 focus:border-cyan-500 focus:outline-none"
                                                 />
-                                                <button onClick={() => copyToClipboard(brief.prompt)} className="mt-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm flex items-center gap-1">
-                                                    <Copy size={14} /> Copy Prompt
-                                                </button>
+                                                <div className="mt-2 flex justify-end">
+                                                    <CopyBtn text={brief.prompt} className="mt-2" />
+                                                </div>
                                             </div>
                                         );
                                     })}

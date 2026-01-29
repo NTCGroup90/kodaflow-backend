@@ -270,15 +270,30 @@ export default function CampaignSetupPage() {
         fetch('/api/ads/status')
             .then(res => res.json())
             .then(data => {
-                setConnectedAccounts({
+                const newConnections = {
                     facebook: data.facebook?.connected || false,
                     tiktok: data.tiktok?.connected || false,
                     google: data.google?.connected || false,
                     youtube: data.youtube?.connected || false
-                });
+                };
+                setConnectedAccounts(newConnections);
+
+                // Auto-select connected platforms
+                const connectedIds = Object.keys(newConnections).filter(key => newConnections[key]);
+                if (connectedIds.length > 0) {
+                    // Start with default selected (fb, tiktok) + any connected ones
+                    const newSelected = [...new Set([...['facebook', 'tiktok'], ...connectedIds])];
+                    setSelectedPlatforms(newSelected);
+
+                    // Trigger budget recalculation for new platforms
+                    // Need to wait for setSelectedPlatforms to take effect or pass directly
+                    // Since state update is async, we pass computed array directly
+                    const smartAlloc = generateSmartAllocation(newSelected, JSON.parse(storedDNA || '{}'), []);
+                    updateBudgetAllocations(newSelected, 500000, smartAlloc);
+                }
             })
             .catch(() => {
-                // Ignore errors, keep default false state
+                // Ignore errors
             });
 
         setIsLoading(false);
