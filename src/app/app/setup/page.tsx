@@ -279,7 +279,7 @@ export default function CampaignSetupPage() {
                 setConnectedAccounts(newConnections);
 
                 // Auto-select connected platforms
-                const connectedIds = Object.keys(newConnections).filter(key => newConnections[key]);
+                const connectedIds = (Object.keys(newConnections) as Array<keyof typeof newConnections>).filter(key => newConnections[key]);
                 if (connectedIds.length > 0) {
                     // Start with default selected (fb, tiktok) + any connected ones
                     const newSelected = [...new Set([...['facebook', 'tiktok'], ...connectedIds])];
